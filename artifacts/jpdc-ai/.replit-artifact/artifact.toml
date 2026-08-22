@@ -1,0 +1,27 @@
+kind = "web"
+previewPath = "/jpdc-ai/"
+title = "JPDC AI"
+version = "1.0.0"
+id = "artifacts/jpdc-ai"
+router = "path"
+
+[[services]]
+name = "web"
+paths = [ "/jpdc-ai/" ]
+localPort = 25036
+
+[services.development]
+run = "pnpm --filter @workspace/jpdc-ai run dev"
+
+[services.production]
+build = [ "pnpm", "--filter", "@workspace/jpdc-ai", "run", "build" ]
+serve = "static"
+publicDir = "artifacts/jpdc-ai/dist/public"
+
+[[services.production.rewrites]]
+from = "/*"
+to = "/index.html"
+
+[services.env]
+PORT = "25036"
+BASE_PATH = "/jpdc-ai/"

@@ -1,0 +1,122 @@
+uploads = []
+generated = []
+
+[[outputs]]
+id = "NFQ9YtYKfzduHOIjmMci5"
+uri = "file://screenshots/design1-chat-interface.jpg"
+type = "image"
+title = "디자인 1 — Chat Interface"
+
+[[outputs]]
+id = "4lA1_aN39gNz2JtV-WTbG"
+uri = "file://screenshots/design2-instrument-panel.jpg"
+type = "image"
+title = "디자인 2 — Instrument Panel"
+
+[[outputs]]
+id = "wDFVo0sdFIt9QzVAQOBfR"
+uri = "file://screenshots/design3-light-workspace.jpg"
+type = "image"
+title = "디자인 3 — Light Workspace"
+
+[[outputs]]
+id = "Z3HCGyR9X-_WcKqerv_rS"
+uri = "file://screenshots/design4-best-of.jpg"
+type = "image"
+title = "디자인 4 — 통합 시안 (Best Of)"
+
+[[outputs]]
+id = "zgBNmTuEcJUz2eTO1Ag-H"
+uri = "file://screenshots/design5-landing-hero.jpg"
+type = "image"
+title = "디자인 5 — Landing Hero (스플릿 랜딩)"
+
+[[outputs]]
+id = "tJ0Rnn5oLHgF03J7NWo2l"
+uri = "file://screenshots/design1-ChatInterface.jpg"
+type = "image"
+title = "디자인 1 — Chat Interface"
+
+[[outputs]]
+id = "9IQqqPAnFOWLP2orrbLGI"
+uri = "file://screenshots/design2-InstrumentPanel.jpg"
+type = "image"
+title = "Design 2 · InstrumentPanel"
+
+[[outputs]]
+id = "RxHe0_K7WsKfBepOiFo-3"
+uri = "file://screenshots/design3-LightWorkspace.jpg"
+type = "image"
+title = "Design 3 · LightWorkspace"
+
+[[outputs]]
+id = "JRf2P0FoSQHFoQ9U3e1zx"
+uri = "file://screenshots/design4-BestOf.jpg"
+type = "image"
+title = "Design 4 · BestOf"
+
+[[outputs]]
+id = "9Icblbfz92uNBpg_oStGB"
+uri = "file://screenshots/design5-LandingHero.jpg"
+type = "image"
+title = "Design 5 · LandingHero"
+
+[[outputs]]
+id = "nr2EyezvT11BryhpD0x2q"
+uri = "file://screenshots/design2-BestOf.jpg"
+type = "image"
+title = "디자인 2 — Best Of"
+
+[[outputs]]
+id = "Q4SRtMIAyFRc_0dQQ3oAI"
+uri = "file://screenshots/design3-MarketplaceHub.jpg"
+type = "image"
+title = "디자인 3 — Marketplace Hub"
+
+[[outputs]]
+id = "gs-2jRgELOBgY7qz8oW5L"
+uri = "file://screenshots/design4-LandingHero.jpg"
+type = "image"
+title = "디자인 4 — Landing Hero"
+
+[[outputs]]
+id = "-7IQ_YecHpyhmuCzMVrMZ"
+uri = "file://screenshots/design1-ext-ChatInterfaceFlyout.jpg"
+type = "image"
+title = "디자인 1 확장 — 새 대화 시작 토글"
+
+[[outputs]]
+id = "gdb8w9NBhUw-znyckBbYq"
+uri = "file://screenshots/design2-ext-ConversationViewBestOf.jpg"
+type = "image"
+title = "디자인 2 확장 — 질의응답 화면"
+
+[[outputs]]
+id = "KuumIZsGT-CJXmNy-h-jj"
+uri = "file://screenshots/design3-ext-ConversationViewMarketplace.jpg"
+type = "image"
+title = "디자인 3 확장 — 질의응답 화면"
+
+[[outputs]]
+id = "rddED34LUwhgZwaRMTm1t"
+uri = "file://screenshots/design4-ext-ConversationView.jpg"
+type = "image"
+title = "디자인 4 확장 — 질의응답 화면"
+
+[[outputs]]
+id = "yX-yEEPnpx-PkvCKrjnJe"
+uri = "file://screenshots/final-01-%EB%A9%94%EC%9D%B8%ED%99%94%EB%A9%B4.jpg"
+type = "image"
+title = "최종 선택안 01 — 메인화면"
+
+[[outputs]]
+id = "TDhpgniyPszAo_uRzXuRw"
+uri = "file://screenshots/final-02-%EB%B9%84%EC%84%9C%EB%A7%88%EC%BC%93.jpg"
+type = "image"
+title = "최종 선택안 02 — 비서마켓"
+
+[[outputs]]
+id = "VO3hxP0V-2akj3ZeYa1Aa"
+uri = "file://screenshots/final-03-%EC%82%AC%EC%9D%B4%EB%93%9C%EB%B0%94%EC%A0%91%EA%B8%B0.jpg"
+type = "image"
+title = "최종 선택안 03 — 사이드바 접기"
