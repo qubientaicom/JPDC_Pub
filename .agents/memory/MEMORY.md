@@ -1,0 +1,1 @@
+- [GitHub publishing](github-publishing.md) — use the authenticated GitHub integration API when shell HTTPS push lacks credentials; throttle blob uploads below the proxy rate limit.
