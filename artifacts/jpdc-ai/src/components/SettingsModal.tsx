@@ -519,14 +519,19 @@ function NotificationPanel() {
 
 /* ─── 사용량 패널 ─── */
 type UsagePeriod = '오늘' | '어제' | '주간' | '누적';
+type CostProvider = 'chatgpt' | 'claude';
 
-const USAGE_DATA: Record<UsagePeriod, {
-  tokens: number; tokenLimit: number | null;
-  queries: number; queryPrev: number | null;
+type UsageSnapshot = {
+  totalTokens: number;
+  tokenLimit: number | null;
+  queries: number;
+  queryPrev: number | null;
   byBot: { name: string; tokens: number; queries: number }[];
-}> = {
+};
+
+const USAGE_DATA: Record<UsagePeriod, UsageSnapshot> = {
   '오늘': {
-    tokens: 12_400, tokenLimit: 50_000,
+    totalTokens: 25_000, tokenLimit: 50_000,
     queries: 8, queryPrev: 19,
     byBot: [
       { name: '회의록 문장정리', tokens: 5_800, queries: 3 },
@@ -535,7 +540,7 @@ const USAGE_DATA: Record<UsagePeriod, {
     ],
   },
   '어제': {
-    tokens: 28_700, tokenLimit: 50_000,
+    totalTokens: 28_700, tokenLimit: 50_000,
     queries: 19, queryPrev: 12,
     byBot: [
       { name: '회의록 문장정리', tokens: 11_200, queries: 7 },
@@ -544,7 +549,7 @@ const USAGE_DATA: Record<UsagePeriod, {
     ],
   },
   '주간': {
-    tokens: 97_200, tokenLimit: 350_000,
+    totalTokens: 97_200, tokenLimit: 350_000,
     queries: 64, queryPrev: 51,
     byBot: [
       { name: '회의록 문장정리', tokens: 38_400, queries: 24 },
@@ -554,7 +559,7 @@ const USAGE_DATA: Record<UsagePeriod, {
     ],
   },
   '누적': {
-    tokens: 1_243_800, tokenLimit: null,
+    totalTokens: 1_243_800, tokenLimit: null,
     queries: 847, queryPrev: null,
     byBot: [
       { name: '회의록 문장정리', tokens: 512_000, queries: 340 },
@@ -565,6 +570,20 @@ const USAGE_DATA: Record<UsagePeriod, {
   },
 };
 
+type TokenRates = { input: number; output: number };
+
+const CHATGPT_PRICING = {
+  label: 'ChatGPT 기준 모델',
+  rates: { input: 4, output: 20 },
+};
+
+const CLAUDE_PRICING = {
+  label: 'Claude Sonnet 4',
+  rates: { input: 3, output: 15 },
+};
+
+const DEFAULT_EXCHANGE_RATE = 1_400;
+
 function fmt(n: number) {
   return n >= 1_000_000
     ? `${(n / 1_000_000).toFixed(1)}M`
@@ -573,10 +592,36 @@ function fmt(n: number) {
     : String(n);
 }
 
+function fmtExact(n: number) {
+  return Math.round(n).toLocaleString('ko-KR');
+}
+
+function fmtWon(n: number) {
+  return `${fmtExact(n)}원`;
+}
+
+function fmtUsd(n: number) {
+  return `$${n.toFixed(4)}`;
+}
+
+function calculateUsageCost(totalTokens: number, rates: TokenRates, exchangeRate: number) {
+  // 전체 토큰만 제공되므로 표시용 평균 단가로 예상 비용만 계산한다.
+  const totalUsd = (totalTokens / 1_000_000) * (rates.input * 0.8 + rates.output * 0.2);
+  return {
+    estimated: true,
+    totalUsd,
+    totalWon: totalUsd * exchangeRate,
+  };
+}
+
 function UsagePanel() {
   const [period, setPeriod] = useState<UsagePeriod>('오늘');
+  const [provider, setProvider] = useState<CostProvider>('chatgpt');
   const d = USAGE_DATA[period];
-  const tokenPct = d.tokenLimit ? Math.min((d.tokens / d.tokenLimit) * 100, 100) : null;
+  const exchangeRate = DEFAULT_EXCHANGE_RATE;
+  const activePricing = provider === 'chatgpt' ? CHATGPT_PRICING : CLAUDE_PRICING;
+  const cost = calculateUsageCost(d.totalTokens, activePricing.rates, exchangeRate);
+  const tokenPct = d.tokenLimit ? Math.min((d.totalTokens / d.tokenLimit) * 100, 100) : null;
   const queryDiff = d.queryPrev !== null ? d.queries - d.queryPrev : null;
   const maxBotTokens = Math.max(...d.byBot.map((b) => b.tokens));
 
@@ -584,7 +629,7 @@ function UsagePanel() {
     <div className="flex flex-col gap-5">
       <div>
         <h3 className="text-[14px] font-bold text-[#1A1826] mb-1">사용량</h3>
-        <p className="text-[12px] text-[#A8A6C0] leading-relaxed">토큰 사용량과 질의 건수를 기간별로 확인합니다.</p>
+        <p className="text-[12px] text-[#A8A6C0] leading-relaxed">토큰 사용량·질의 건수·API 비용을 기간별로 확인합니다.</p>
       </div>
 
       <div className="h-px bg-[#E4E2F0]" />
@@ -607,18 +652,112 @@ function UsagePanel() {
         ))}
       </div>
 
-      {/* 스탯 카드 2개 */}
+      {/* 비용 계산 기준 탭 */}
+      <div className="flex flex-col gap-3 rounded-xl border border-[#E4E2F0] bg-[#FAFAFE] p-3.5">
+        <div className="flex items-center justify-between gap-3">
+          <div>
+            <p className="text-[12px] font-bold text-[#1A1826]">비용 계산 기준</p>
+            <p className="text-[10.5px] text-[#A8A6C0] mt-0.5">2026.08.25 기준 단가로 계산합니다.</p>
+          </div>
+          <div className="flex gap-1 p-1 bg-[#F0EEFF] rounded-lg" role="tablist" aria-label="비용 계산 기준">
+            {([
+              ['chatgpt', 'ChatGPT'],
+              ['claude', 'Claude'],
+            ] as [CostProvider, string][]).map(([value, label]) => (
+              <button
+                key={value}
+                type="button"
+                role="tab"
+                aria-selected={provider === value}
+                onClick={() => setProvider(value)}
+                className={`px-3 py-1.5 rounded-md text-[11px] font-semibold transition-all
+                  ${provider === value ? 'bg-white text-[#4F46E5] shadow-sm' : 'text-[#8E8AA8] hover:text-[#6B6882]'}`}
+              >
+                {label}
+              </button>
+            ))}
+          </div>
+        </div>
+
+        <div className="grid grid-cols-2 gap-2.5">
+          <div className="flex flex-col gap-1">
+            <span className="text-[10.5px] font-semibold text-[#6B6882]">모델 단가</span>
+            <div className="w-full rounded-lg border border-[#E4E2F0] bg-white px-2.5 py-2 text-[11px] text-[#1A1826]">
+              기본 모델 ({activePricing.label})
+            </div>
+          </div>
+          <label className="flex flex-col gap-1">
+            <span className="text-[10.5px] font-semibold text-[#6B6882]">
+              환율 (원/USD)
+            </span>
+            <div className="rounded-lg border border-[#E4E2F0] bg-[#F4F3FC] px-2.5 py-2 text-[11px] text-[#6B6882]">
+              {fmtExact(DEFAULT_EXCHANGE_RATE)}원 <span className="text-[#A8A6C0]">(공통)</span>
+            </div>
+          </label>
+        </div>
+
+        <div className="rounded-lg bg-white border border-[#E4E2F0] px-3 py-2.5 text-[10.5px] leading-relaxed text-[#6B6882]">
+          {provider === 'chatgpt' ? (
+            <>
+              <span className="font-semibold text-[#4F46E5]">ChatGPT 계산식</span>
+              <span className="ml-1">Total Tokens ÷ 1M × 기준 단가(표시용 평균) × 환율</span>
+            </>
+          ) : (
+            <>
+              <span className="font-semibold text-[#4F46E5]">Claude 계산식</span>
+              <span className="ml-1">Total Tokens ÷ 1M × 기준 단가(표시용 평균) × 환율 · 환율 가정: {fmtExact(exchangeRate)}원</span>
+            </>
+          )}
+        </div>
+      </div>
+
+      {/* 토큰 상세 */}
+      <div className="flex flex-col gap-2">
+        <div className="flex items-center justify-between">
+          <p className="text-[12px] font-bold text-[#6B6882] uppercase tracking-wide">토큰 상세</p>
+          <span className="text-[10px] text-[#A8A6C0]">{period} 기준</span>
+        </div>
+        <div className="rounded-xl border border-[#E4E2F0] bg-white px-3.5 py-3 flex items-end justify-between gap-3">
+          <div>
+            <p className="text-[10px] font-semibold text-[#A8A6C0] tracking-wide">Total Tokens</p>
+            <p className="mt-1.5 text-[24px] font-bold text-[#1A1826] leading-none">{fmtExact(d.totalTokens)}</p>
+          </div>
+          <span className="text-[10px] text-[#8E8AA8] text-right">전체 토큰 기준<br />유형별 구분 없음</span>
+        </div>
+      </div>
+
+      {/* 비용 상세 */}
+      <div className="rounded-xl border border-[#DCD7FF] bg-[#F8F7FF] p-3.5">
+        <div className="flex items-start justify-between gap-3 mb-3">
+          <div>
+            <p className="text-[12px] font-bold text-[#1A1826]">실행 결과 및 비용</p>
+            <p className="text-[10.5px] text-[#8E8AA8] mt-0.5">{activePricing.label} · {fmtExact(exchangeRate)}원/USD</p>
+          </div>
+          <span className="rounded-full bg-[#FEF3C7] px-2 py-1 text-[9.5px] font-semibold text-[#9A6B14]">예상 비용</span>
+        </div>
+        <div className="flex items-end justify-between rounded-lg border border-[#F0D9A8] bg-white px-3 py-2.5">
+          <div>
+            <p className="text-[10.5px] text-[#8E8AA8]">Estimated Cost · 예상 비용</p>
+            <p className="mt-1 text-[22px] font-bold text-[#6B4F10] leading-none">{fmtWon(cost.totalWon)}</p>
+          </div>
+          <p className="text-[10px] text-[#A88645] text-right">약 {fmtUsd(cost.totalUsd)}<br />전체 토큰 기준</p>
+        </div>
+        <p className="mt-2 text-[9.5px] leading-relaxed text-[#8E8AA8]">
+          토큰 유형을 구분하지 않고 전체 토큰으로 산정한 예상 비용입니다. ChatGPT와 Claude 모두 공통 환율 1,400원을 적용합니다.
+        </p>
+      </div>
+
+      {/* 토큰 한도·질의 건수 */}
       <div className="grid grid-cols-2 gap-3">
-        {/* 토큰 사용량 */}
         <div className="rounded-xl border border-[#E4E2F0] bg-white px-4 py-3.5 flex flex-col gap-2">
-          <p className="text-[10.5px] font-semibold text-[#A8A6C0] uppercase tracking-wide">토큰 사용량</p>
+          <p className="text-[10.5px] font-semibold text-[#A8A6C0] uppercase tracking-wide">토큰 한도</p>
           <p className="text-[23px] font-bold text-[#1A1826] leading-none">
-            {fmt(d.tokens)}
+            {fmt(d.totalTokens)}
             {d.tokenLimit && (
               <span className="text-[12px] font-normal text-[#A8A6C0] ml-1">/ {fmt(d.tokenLimit)}</span>
             )}
           </p>
-          {tokenPct !== null && (
+          {tokenPct !== null ? (
             <div className="flex flex-col gap-1">
               <div className="h-1.5 rounded-full bg-[#E4E2F0] overflow-hidden">
                 <div
@@ -629,26 +768,23 @@ function UsagePanel() {
               </div>
               <p className="text-[11px] text-[#A8A6C0]">{tokenPct.toFixed(1)}% 사용</p>
             </div>
-          )}
-          {tokenPct === null && (
+          ) : (
             <p className="text-[11px] text-[#A8A6C0]">제한 없음</p>
           )}
         </div>
 
-        {/* 질의 건수 */}
         <div className="rounded-xl border border-[#E4E2F0] bg-white px-4 py-3.5 flex flex-col gap-2">
           <p className="text-[10.5px] font-semibold text-[#A8A6C0] uppercase tracking-wide">질의 건수</p>
           <p className="text-[23px] font-bold text-[#1A1826] leading-none">
             {d.queries.toLocaleString()}
             <span className="text-[12px] font-normal text-[#A8A6C0] ml-1">건</span>
           </p>
-          {queryDiff !== null && (
+          {queryDiff !== null ? (
             <p className={`text-[11px] font-semibold ${queryDiff >= 0 ? 'text-[#10B981]' : 'text-[#EF4444]'}`}>
               {queryDiff >= 0 ? `▲ ${queryDiff}건` : `▼ ${Math.abs(queryDiff)}건`}
               <span className="font-normal text-[#A8A6C0] ml-1">전일 대비</span>
             </p>
-          )}
-          {queryDiff === null && (
+          ) : (
             <p className="text-[11px] text-[#A8A6C0]">서비스 개시 이후</p>
           )}
         </div>
@@ -1020,26 +1156,28 @@ export default function SettingsModal({ onClose, favorites = [], onRemoveFavorit
           </div>
 
           {/* Footer buttons */}
-          <div className="h-12 flex items-center justify-end gap-2 px-6 border-t border-[#E4E2F0] shrink-0">
-            <button
-              type="button"
-              onClick={onClose}
-              className="px-4 py-2 rounded-lg border border-[#E4E2F0] text-sm font-semibold text-[#6B6882] hover:bg-[#F4F3FC] hover:text-[#1A1826] transition-colors"
-            >
-              취소
-            </button>
-            <button
-              type="button"
-              onClick={handleSave}
-              className={`px-5 py-2 rounded-lg text-white text-sm font-semibold shadow-sm transition-all duration-200
-                ${saveFlash
-                  ? 'bg-[#16A34A] shadow-[#16A34A]/25 scale-95'
-                  : 'bg-[#4F46E5] hover:bg-[#4338CA] shadow-[#4F46E5]/25'
-                }`}
-            >
-              {saveFlash ? '저장됨 ✓' : '저장'}
-            </button>
-          </div>
+          {activeTab !== '사용량' && (
+            <div className="h-12 flex items-center justify-end gap-2 px-6 border-t border-[#E4E2F0] shrink-0">
+              <button
+                type="button"
+                onClick={onClose}
+                className="px-4 py-2 rounded-lg border border-[#E4E2F0] text-sm font-semibold text-[#6B6882] hover:bg-[#F4F3FC] hover:text-[#1A1826] transition-colors"
+              >
+                취소
+              </button>
+              <button
+                type="button"
+                onClick={handleSave}
+                className={`px-5 py-2 rounded-lg text-white text-sm font-semibold shadow-sm transition-all duration-200
+                  ${saveFlash
+                    ? 'bg-[#16A34A] shadow-[#16A34A]/25 scale-95'
+                    : 'bg-[#4F46E5] hover:bg-[#4338CA] shadow-[#4F46E5]/25'
+                  }`}
+              >
+                {saveFlash ? '저장됨 ✓' : '저장'}
+              </button>
+            </div>
+          )}
         </div>
       </div>
     </div>

@@ -1,0 +1,273 @@
+# LLM 토큰 사용량 기반 원화 비용 계산
+
+LLM 사용량의 `input_tokens`, `cached_input_tokens`, `output_tokens`를 기준으로 원화(KRW) 비용을 계산한다.
+
+## 1. 기준 단가
+
+GPT-5.6 Sol 기준 단가는 다음과 같이 설정한다.
+
+```text
+Input Token       : $4.00 / 1,000,000 tokens
+Cached Input Token: $0.40 / 1,000,000 tokens
+Output Token      : $20.00 / 1,000,000 tokens
+```
+
+환율 기본값:
+
+```text
+USD_TO_KRW = 1400
+```
+
+환율은 하드코딩하지 말고 설정값으로 변경할 수 있도록 구현한다.
+
+---
+
+## 2. 기본 계산 공식
+
+변수:
+
+```text
+I = input_tokens
+C = cached_input_tokens
+O = output_tokens
+R = USD_TO_KRW
+```
+
+달러 비용:
+
+```text
+USD_COST =
+    (I / 1,000,000 × 4.00)
+  + (C / 1,000,000 × 0.40)
+  + (O / 1,000,000 × 20.00)
+```
+
+원화 비용:
+
+```text
+KRW_COST = USD_COST × R
+```
+
+따라서 최종 공식은:
+
+```text
+KRW_COST =
+(
+    (input_tokens / 1,000,000 × 4.00)
+  + (cached_input_tokens / 1,000,000 × 0.40)
+  + (output_tokens / 1,000,000 × 20.00)
+)
+× USD_TO_KRW
+```
+
+---
+
+## 3. 환율 1,400원 기준 간소화 공식
+
+환율이 `$1 = 1,400원`일 경우 토큰 1개당 비용은 다음과 같다.
+
+```text
+일반 Input  1 token = 0.0056원
+Cached Input 1 token = 0.00056원
+Output       1 token = 0.028원
+```
+
+따라서:
+
+```text
+KRW_COST =
+    input_tokens × 0.0056
+  + cached_input_tokens × 0.00056
+  + output_tokens × 0.028
+```
+
+---
+
+## 4. 계산 예시
+
+사용량:
+
+```text
+input_tokens        = 20,000
+cached_input_tokens = 0
+output_tokens       = 5,000
+USD_TO_KRW          = 1,400
+```
+
+계산:
+
+```text
+Input 비용
+20,000 × 0.0056
+= 112원
+
+Output 비용
+5,000 × 0.028
+= 140원
+
+총 비용
+112 + 140
+= 252원
+```
+
+결과:
+
+```text
+Total Tokens = 25,000
+Estimated Cost = 252원
+```
+
+---
+
+## 5. 총 토큰만 존재할 경우 추정
+
+입력/출력 토큰이 분리되어 있지 않고 `total_tokens`만 존재하는 경우에는 다음 비율을 기본 추정값으로 사용한다.
+
+```text
+Input  = 80%
+Output = 20%
+```
+
+따라서:
+
+```text
+ESTIMATED_INPUT  = total_tokens × 0.8
+ESTIMATED_OUTPUT = total_tokens × 0.2
+```
+
+환율 1,400원 기준:
+
+```text
+ESTIMATED_KRW_COST =
+    (total_tokens × 0.8 × 0.0056)
+  + (total_tokens × 0.2 × 0.028)
+```
+
+간소화하면:
+
+```text
+ESTIMATED_KRW_COST = total_tokens × 0.01008
+```
+
+예:
+
+```text
+100,000 tokens
+≈ 1,008원
+
+1,000,000 tokens
+≈ 10,080원
+```
+
+단, `total_tokens`만 사용하는 계산은 추정치이므로 UI에서 반드시 `예상 비용`으로 표시한다.
+
+---
+
+## 6. 구현 요구사항
+
+비용 계산 로직은 특정 모델에 하드코딩하지 않는다.
+
+모델별 가격 정보를 다음과 같은 구조로 관리한다.
+
+```text
+model_pricing
+
+model_name
+input_price_per_1m
+cached_input_price_per_1m
+output_price_per_1m
+currency
+```
+
+예:
+
+```text
+model_name                = GPT-5.6-Sol
+input_price_per_1m        = 4.00
+cached_input_price_per_1m = 0.40
+output_price_per_1m       = 20.00
+currency                  = USD
+```
+
+환율 역시 별도 설정값으로 관리한다.
+
+```text
+USD_TO_KRW = 1400
+```
+
+최종 계산은 다음 범용 공식을 사용한다.
+
+```text
+function calculateKRWCost(
+    inputTokens,
+    cachedInputTokens,
+    outputTokens,
+    inputPricePer1M,
+    cachedInputPricePer1M,
+    outputPricePer1M,
+    usdToKrw
+):
+
+    inputCost =
+        inputTokens / 1_000_000
+        × inputPricePer1M
+
+    cachedInputCost =
+        cachedInputTokens / 1_000_000
+        × cachedInputPricePer1M
+
+    outputCost =
+        outputTokens / 1_000_000
+        × outputPricePer1M
+
+    usdCost =
+        inputCost
+        + cachedInputCost
+        + outputCost
+
+    krwCost =
+        usdCost × usdToKrw
+
+    return krwCost
+```
+
+## 7. UI 표시
+
+실행 결과 및 비용 모니터링 화면에는 최소 다음 정보를 표시한다.
+
+```text
+Input Tokens       : 20,000
+Cached Input Tokens: 0
+Output Tokens      : 5,000
+Total Tokens       : 25,000
+
+Input Cost         : 112원
+Cached Input Cost  : 0원
+Output Cost        : 140원
+Total Cost         : 252원
+```
+
+입력/출력 토큰을 구분할 수 없는 경우:
+
+```text
+Total Tokens   : 25,000
+Estimated Cost : 약 252원
+```
+
+처럼 `Estimated` 또는 `예상 비용`임을 명확하게 표시한다.
+
+## 핵심 공식
+
+```text
+원화 비용 =
+[
+  (입력 토큰 ÷ 1,000,000 × 입력 단가)
+  +
+  (캐시 입력 토큰 ÷ 1,000,000 × 캐시 입력 단가)
+  +
+  (출력 토큰 ÷ 1,000,000 × 출력 단가)
+]
+× 원/달러 환율
+```
+
+이 공식을 공통 비용 계산 모듈로 구현하여 **모델별 단가만 변경하면 모든 LLM 모델에 동일하게 적용**할 수 있도록 한다.

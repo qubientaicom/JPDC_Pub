@@ -1947,3 +1947,257 @@ type QueryKind =
   kind='instruction': { streaming: true }
   kind='assistant-select': { candidates: getAssistantCandidates(q) }
 ```
+
+---
+
+## 29. 최신 대화 UX 보완 명세 (ConversationView)
+
+> 이 절은 앞선 대화 화면·분할 패널 명세를 보완한다. 동일 항목이 충돌할 경우 이 절의 최신 동작을 우선한다.
+
+### 29-1. 확장된 질의 분류와 정규화
+
+```ts
+type QueryKind =
+  | 'instruction'           // RAG 지침 단일 답변
+  | 'assistant-select'      // 비서 후보 카드
+  | 'tag-stats'             // TAG 통계 답변
+  | 'tag-assistant'         // TAG 통계 완료 후 비서 추천
+  | 'dual-tag'              // TAG 2분할 통계
+  | 'dual-tag-assistant'    // TAG 2분할 완료 후 비서 추천
+  | 'ambiguous'             // RAG/비서 병렬 분할
+  | 'rag-ab'                // RAG A/B 비교
+  | 'rag-tag-assistant'     // RAG 지침 + TAG 현황 + 비서 추천 3분할
+  | 'minutes-request'       // 회의록 원문 입력 요청
+  | 'minutes-result'        // 회의록 결과
+  | 'fallback'              // 미식별 안내 후 비서 추천
+  | 'fallback-assistant';   // 비서 찾기 후 RAG 지침을 함께 제시
+```
+
+```
+normalizeRagTagQuery(text):
+  1. zero-width space(\u200B)를 제거한다.
+  2. 문자열 끝의 "RAG+TAG+비서" 표기(괄호 유무 무관)를 제거한다.
+  3. trim()한 결과로 고정 트리거와 ANSWER_MAP을 조회한다.
+
+분류 우선순위:
+  rag-ab → rag-tag-assistant → dual-tag-assistant → dual-tag
+  → tag-assistant → fallback → fallback-assistant → 일반 키워드 분류
+
+고정 데모 트리거:
+  - "입고 처리가 안 된 작업지시가 있어?" → rag-tag-assistant
+  - "3월 생산량 합계 보여줘 (TAG/분할/비서)" → dual-tag-assistant
+  - "3월 생산량 합계 보여줘" → dual-tag
+  - "비서 유형 활용 현황 구해줘 (TAG+비서)" → tag-assistant
+  - "회의록 작성 어떻게 해? (미식별 후 비서 추천)" → fallback
+  - "회의록 작성 잘 하는법" → fallback-assistant
+```
+
+### 29-2. RAG + TAG + 비서 추천 복합 패널
+
+```
+트리거: "입고 처리가 안 된 작업지시가 있어?"
+
+AI 아바타 오른쪽에 3개 결과를 세로로 배치한다.
+
+① RAG 지침 영역
+   - 에메랄드 계열 헤더: "RAG 지침 찾기" / "규정 DB 조회"
+   - 스트리밍 답변과 참고 문서 3개를 표시한다.
+
+② TAG 현황 영역
+   - 인디고 계열 헤더: "TAG 입고 현황" / "작업지시 DB 조회"
+   - 입고 미처리 7건의 상태별 표를 표시한다.
+   - "입고 처리 건수 비교" 제목의 작은 막대 차트를 표시한다.
+   - 완료·검수 대기·수량 확인·담당자 처리 대기 상태를 색상으로 구분한다.
+
+③ 추천 비서 영역
+   - 앰버 계열 헤더: "추천 비서" / "비서마켓 조회"
+   - 질의와 연관된 후보 비서 카드를 표시한다.
+   - 후보를 클릭하면 해당 비서를 선택한 대화 흐름으로 전환한다.
+
+모든 스트리밍이 완료된 후 공통 ActionBar를 표시한다.
+```
+
+### 29-3. TAG 결과 후 비서 추천
+
+```
+tag-assistant:
+  TAG 통계 패널이 스트리밍을 마친 뒤, 바로 아래에 compact AssistantSelectPanel을 추가한다.
+
+dual-tag-assistant:
+  2개의 InterpretationCard가 완료된 뒤, 바로 아래에 compact AssistantSelectPanel을 추가한다.
+
+fallback:
+  미식별 안내문을 스트리밍한 뒤 compact AssistantSelectPanel을 보여 준다.
+
+fallback-assistant:
+  RAG 지침 답변을 먼저 보여 주고, 참고 문서와 ActionBar 사이에
+  compact AssistantSelectPanel을 삽입한다.
+```
+
+### 29-4. `이어서 질의` — 자동 전송 없는 입력 대기 흐름
+
+```
+표시 위치:
+  - RAG + TAG + 비서 추천 패널 하단
+  - TAG 2분할의 각 InterpretationCard 하단
+
+ContinueQueryButton:
+  flex items-center gap-1.5
+  px-3 py-1.5 rounded-lg
+  border border-[#C7C3F7] bg-[#EEF0FF]
+  text-[11.5px] font-semibold text-[#4F46E5]
+  Sparkles/ArrowRight 계열 아이콘 + "이어서 질의"
+  hover: bg-[#4F46E5] text-white
+
+클릭 동작:
+  1. 어떠한 자동 후속 질의도 전송하지 않는다.
+  2. awaitingFollowUp=true로 바꾼다.
+  3. focusRequest를 증가시켜 textarea에 즉시 포커스한다.
+  4. 마지막 메시지가 follow-up-prompt가 아닐 때만 안내 메시지를 하나 추가한다.
+
+follow-up-prompt 메시지:
+  - 좌측: JPDC 로고 32px 정사각 rounded-xl
+  - 본문: indigo-to-light-indigo gradient, #A5B4FC border,
+    rounded-2xl rounded-tl-sm, px-5 py-3.5
+  - 그림자: shadow-md shadow-[#818CF8]/20, ring-2 ring-[#818CF8]/10
+  - motion-reduce에서는 정지하고, 일반 환경에서는 animate-pulse
+  - 아이콘: 24px 원형 #4F46E5 배경의 흰 Sparkles
+  - 고정 문구: 굵은 14px #3730A3 "궁금하신 것을 입력해주세요."
+
+후속 대기 중 입력창:
+  placeholder: "궁금하신 것을 입력해주세요... (Enter 전송)"
+  평상시 placeholder: "추가 질문을 입력하세요... (Enter 전송)"
+  Enter는 전송, Shift+Enter는 줄바꿈이다.
+```
+
+### 29-5. 공통 ActionBar와 피드백 모달
+
+```
+ActionBar:
+  mt-3 space-y-2, 내부 버튼 행은 flex flex-wrap gap-1 px-1.
+
+버튼 순서:
+  1. 좋아요 — ThumbsUp, emerald hover/선택 상태
+  2. 싫어요 — ThumbsDown, red hover/선택 상태
+  3. 1px 세로 구분선
+  4. 저장 / 저장됨 — Bookmark, 성공 시 emerald fill, 약 2초 후 원상복귀
+  5. 복사 / 복사됨 — Copy, clipboard에 "Q. {질문}\n\n{답변}" 복사
+  6. MD — FileDown, 질문·답변·참고문서를 Markdown 파일로 다운로드
+  7. 재생성 — 오른쪽 정렬, RotateCcw
+
+피드백 모달:
+  fixed inset-0 z-[200], 검정 30% + 2px blur backdrop.
+  카드: w-full max-w-[480px], white, rounded-2xl, border #E4E2F0, p-6.
+  제목:
+    좋아요 → "긍정적인 피드백 제공"
+    싫어요 → "부정적인 피드백 제공"
+
+평가 점수:
+  - 공통으로 `싫어요 | 0 | 좋아요` 3열 레이아웃을 유지한다.
+  - 좌측은 빨간 별 5개(5 → 1), 우측은 녹색 별 5개(1 → 5)다.
+  - 부정 피드백 모달에서는 왼쪽 빨간 별만 활성화한다.
+  - 긍정 피드백 모달에서는 오른쪽 녹색 별만 활성화한다.
+  - 반대편 별은 disabled, opacity-30, cursor-not-allowed 상태다.
+  - 별 hover는 scale-110, 선택 별은 해당 방향 색상으로 채운다.
+  - 선택된 점수에 따라 "조금 도움됨"/"매우 도움됨" 또는
+    "조금 아쉬움"/"매우 부적절" 문구를 표시한다.
+
+사유 칩:
+  SOURCE, RELEVANCE, COMPLETENESS, RECENCY, DATA, FORMAT, ACTIONABILITY.
+  복수 선택 가능. 긍정은 emerald, 부정은 red 계열로 선택 상태를 표시한다.
+  아래에는 방향별 상세 의견 placeholder를 가진 textarea와 취소/제출 버튼을 둔다.
+```
+
+### 29-6. 대화 입력창의 첨부와 비서 선택
+
+```
+첨부:
+  - Paperclip 클릭으로 다중 파일을 선택한다.
+  - 이미지, PDF, Office, 압축 파일 등 확장자별 accent color를 적용한다.
+  - 각 파일 칩에는 확장자 배지, 이름, 용량, 인덱싱 진행률과
+    "벡터 인덱싱 중… N%" 또는 "✓ 임베딩 완료" 상태를 보여 준다.
+  - 인덱싱은 파일별 1.2~2.2초, 200ms 간격으로 시작하는 시각 효과다.
+
+비서 선택:
+  - Users + "비서 선택" 드롭다운.
+  - 선택 시 indigo 배경/테두리로 활성화하고, 다시 선택하면 해제한다.
+  - 선택 목록은 사용자 비서 순서 설정을 따르며, 역순으로 표시한다.
+
+전송:
+  - ArrowUp, 32px rounded-xl #4F46E5 버튼.
+  - Tooltip: "메시지 전송 (Enter)".
+  - 입력창 아래 고정 문구:
+    "JPDC AI는 실수를 할 수 있습니다. 중요한 정보는 반드시 원문을 확인하세요."
+```
+
+---
+
+## 30. 패널·모달의 최신 동작
+
+### 30-1. 저장 목록과 알림 센터
+
+```
+저장 목록:
+  - 데스크톱에서 오른쪽 280px 폭으로 열리고 닫힐 때 width/opacity 300ms 전환.
+  - 헤더: BookmarkCheck + "저장 목록" + 항목 수 배지 + 닫기 X.
+  - 비어있음: Bookmark 아이콘과 "저장한 답변이 없습니다".
+  - 항목: 질문(인디고), 답변 3줄, 저장 시각을 white 카드로 보여 준다.
+  - hover시에만 삭제 X가 노출되며 삭제 색상은 red.
+
+알림 센터:
+  - 데스크톱은 오른쪽 300px 패널, 모바일은 최대 85vw 슬라이드오버와 backdrop.
+  - 헤더: Bell + "알림 센터" + 읽지 않은 수 + "모두 읽음" + 닫기.
+  - 항목 클릭은 읽음 처리, hover시에만 삭제 X가 노출된다.
+  - 종류별 아이콘:
+      alert = red AlertCircle, info = indigo Info, success = emerald CheckCircle2.
+  - 모두 삭제된 빈 상태: Bell 아이콘과 "알림이 없습니다".
+  - 저장 패널과 알림 센터는 상호 배타적으로 열린다.
+```
+
+### 30-2. 개인 설정
+
+```
+SettingsModal:
+  탭: 표시 / 비서 / 알림 / 사용량.
+
+표시:
+  라이트·다크 미리보기 카드, 글꼴 크기(12/14/16px) 드롭다운,
+  넓게·표준·좁게 표시 밀도와 실시간 목록 미리보기.
+
+비서:
+  비서 검색, 다중 선택 칩, 카테고리별 비서 목록,
+  비서 순서 위·아래 이동 및 즐겨찾기 관리.
+
+알림:
+  뱃지·대화 완료·비서 업데이트·주간 요약 등 토글 기반 수신 설정.
+
+사용량:
+  기간 선택, 수치 카드와 사용량 시각화.
+
+메모리:
+  선택 비서/전체 범위별 메모리 토글, 추가·편집·공유 범위 변경·삭제,
+  전체 삭제의 빈 상태까지 제공한다. 메모리 UI에는 버전 문구를 노출하지 않는다.
+```
+
+### 30-3. 안내 및 선택 모달
+
+```
+OnboardingModal:
+  5단계: 기본 질의하기 / 일반 질의 / 데이터질의 대화하기 /
+         비서 만들기 / 비서 사용하기.
+  각 단계는 아이콘·제목·부제·실제 UI 미니 화면·예시 질의 말풍선·팁을 갖는다.
+  상단 X, 이전/다음, 단계 점을 제공하고 마지막 버튼은 완료 처리한다.
+
+ManualModal:
+  기능별 이용 매뉴얼과 도움말 콘텐츠를 모달로 제공한다.
+  HelpPopover와 동일한 인디고 계열 도움말 문법을 사용한다.
+
+IconPickerModal:
+  아이콘명/한글 키워드 검색, 카테고리 탭, 배경 색상 팔레트,
+  아이콘 그리드와 선택/취소 버튼으로 구성한다.
+  "책, 도서, 설정, 사람… 또는 book, person, home…" 검색을 지원한다.
+
+AssistantInfoModal / AssistantStatsModal:
+  공식 비서의 설명·통계·별점·같은 작성자의 다른 비서·채팅 시작·복제와
+  비서별 상세 이용 통계를 제공한다.
+```
