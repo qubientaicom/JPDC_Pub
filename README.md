@@ -1,0 +1,135 @@
+# JPDC AI
+
+제주개발공사(JPDC)를 위한 AI 업무 지원 웹앱입니다. 여러 AI 비서와 대화하고, 답변을 RAG/TAG 관점으로 확인하며, 사용량·비용·저장목록·알림·개인 설정을 한 곳에서 관리할 수 있도록 구성했습니다.
+
+## 주요 변경사항
+
+### 대화 및 AI 응답
+
+- RAG/TAG 분할 답변 영역 제공
+- 분할 답변 내부 차트 및 시각화 지원
+- 답변 방향별 좋아요·싫어요 피드백과 별점 제한
+- 분할 답변에서 바로 이어서 질의하는 흐름 지원
+- 자동 후속 질의 제거
+- 관련·추천 AI 비서 표시
+- 대화 화면 내부 스크롤 및 읽기 쉬운 응답 레이아웃 개선
+
+### 탐색 및 업무 화면
+
+- 홈, 대화, 비서마켓 내부 스크롤 개선
+- 브리핑 및 주요 지표 화면 구성
+- 질의 이력 조회
+- 도움말 화면 구성
+- 저장목록 삭제 및 빈 상태 화면
+- 알림센터 삭제 및 빈 상태 화면
+
+### 개인 설정
+
+- 개인 설정 모달과 탭 기반 설정 화면
+- 개인 메모리 조회·수정·범위 변경·삭제
+- 비서 순서 관리
+- 표시·알림 설정 화면
+- 사용량 기간별 조회 및 서비스별 탭
+- 사용량 모달의 불필요한 `취소`·`저장` 버튼 제거
+
+### 사용량 및 비용 표시
+
+- ChatGPT·Claude 모델 선택 드롭다운 제거
+- 서비스별 기본 모델명 고정 표시
+- `Input Tokens`, `Cached Input Tokens`, `Output Tokens` 구분 제거
+- `Total Tokens`만 표시
+- 비용은 `Estimated Cost · 예상 비용`으로 표시
+- ChatGPT와 Claude 모두 공통 환율 `1,400원` 적용
+- 토큰 유형별 실측값이 없는 데모 환경이므로 전체 토큰과 평균 단가를 기반으로 예상 비용 계산
+
+## 실행 방법
+
+### 사전 요구사항
+
+- Node.js 24
+- pnpm
+
+의존성을 설치합니다.
+
+```bash
+pnpm install
+```
+
+### JPDC AI 웹앱 실행
+
+```bash
+pnpm --filter @workspace/jpdc-ai run dev
+```
+
+### API 서버 실행
+
+별도 터미널에서 실행합니다.
+
+```bash
+pnpm --filter @workspace/api-server run dev
+```
+
+API 서버는 개발 환경에서 포트 5000을 사용합니다.
+
+### 품질 검사 및 빌드
+
+```bash
+# 전체 타입 검사
+pnpm run typecheck
+
+# 전체 타입 검사 및 패키지 빌드
+pnpm run build
+```
+
+> 현재 타입 검사는 기존 컴포넌트의 타입 이슈가 남아 있을 수 있습니다. 웹앱 개발 서버의 HMR과 브라우저 콘솔에서 변경된 UI 흐름을 함께 확인하는 것을 권장합니다.
+
+## 프로젝트 구조
+
+```text
+artifacts/
+├── jpdc-ai/          # JPDC AI 웹 프론트엔드
+├── api-server/       # Express API 서버
+└── mockup-sandbox/   # UI 컴포넌트 미리보기 서버
+
+lib/
+├── api-client-react/ # API 클라이언트
+├── api-spec/         # OpenAPI 원본
+├── api-zod/          # API 검증 스키마
+└── db/               # Drizzle/PostgreSQL 데이터 계층
+
+attached_assets/      # 브랜드 이미지·폰트 및 참고 에셋
+```
+
+## API 문서
+
+프론트엔드와 백엔드 연동을 위한 계약서는 다음 파일에 있습니다.
+
+- [`artifacts/api-server/API_SPEC.md`](artifacts/api-server/API_SPEC.md)
+
+현재 API 서버에 실제로 연결된 라우트는 `/api/healthz`이며, 나머지 API는 화면과 백엔드가 합의할 수 있도록 작성된 계약용 명세입니다. 사용량 응답은 다음 정책을 기준으로 합니다.
+
+- 토큰 필드: `totalTokens`
+- 환율: `exchangeRateKrw: 1400`
+- 비용 필드: `estimatedCostUsd`, `estimatedCostKrw`
+- 비용 상태: `estimated: true`
+- 산정 방식: `total_tokens_average_rate`
+
+## 기술 스택
+
+- pnpm workspace
+- React 19 + TypeScript
+- Vite
+- Tailwind CSS
+- Radix UI
+- Lucide React
+- Recharts
+- Express 5
+- Drizzle ORM + PostgreSQL
+- Zod 및 Orval 기반 API 계약·검증
+
+## 개발 참고사항
+
+- 현재 화면의 사용량 수치와 비용은 데모 데이터 기반입니다.
+- 운영 환경에서는 정적 데모 데이터를 실제 API 응답으로 교체해야 합니다.
+- 인증이 연결되지 않은 개발 환경에서 보호된 API가 `401`을 반환하는 것은 정상입니다.
+- API 요청에는 세션 쿠키를 사용하며, 프론트엔드는 `credentials: include` 방식으로 연동합니다.
