@@ -1,5 +1,5 @@
 kind = "web"
-previewPath = "/jpdc-ai/"
+previewPath = "/"
 title = "JPDC AI"
 version = "1.0.0"
 id = "artifacts/jpdc-ai"
@@ -7,7 +7,7 @@ router = "path"
 
 [[services]]
 name = "web"
-paths = [ "/jpdc-ai/" ]
+paths = [ "/" ]
 localPort = 25036
 
 [services.development]
@@ -24,4 +24,4 @@ to = "/index.html"
 
 [services.env]
 PORT = "25036"
-BASE_PATH = "/jpdc-ai/"
+BASE_PATH = "/"

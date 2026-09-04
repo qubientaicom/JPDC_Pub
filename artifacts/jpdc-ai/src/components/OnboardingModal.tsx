@@ -155,7 +155,7 @@ function RagVisual() {
   return (
     <div className="relative w-full h-full overflow-hidden rounded-xl">
       <img
-        src="/jpdc-ai/onboarding/tag-rag.png"
+        src={`${import.meta.env.BASE_URL}onboarding/tag-rag.png`}
         alt="일반 질의 + 추천 비서"
         className="w-full h-full object-cover object-top"
         draggable={false}
@@ -180,7 +180,7 @@ function TagVisual() {
   return (
     <div className="relative w-full h-full overflow-hidden rounded-xl">
       <img
-        src="/jpdc-ai/onboarding/tag-split.png"
+        src={`${import.meta.env.BASE_URL}onboarding/tag-split.png`}
         alt="데이터질의 분할 결과 화면"
         className="w-full h-full object-cover object-top"
         draggable={false}
@@ -203,17 +203,17 @@ function TagVisual() {
 /* ─── 비주얼 3: 비서 만들기 (실제 스크린샷 3단계 순환) ─── */
 const CREATE_SLIDES = [
   {
-    img: '/jpdc-ai/onboarding/create-step1.png',
+    img: `${import.meta.env.BASE_URL}onboarding/create-step1.png`,
     alt: '내가 만든 모든 비서 탭',
     bubble: { text: '+ 나만의 비서 만들기 클릭!', color: '#0891B2', tail: 'top-right' as const, pos: 'top-[20%] right-[3%]' },
   },
   {
-    img: '/jpdc-ai/onboarding/create-step2.png',
+    img: `${import.meta.env.BASE_URL}onboarding/create-step2.png`,
     alt: '비서 주제 입력',
     bubble: { text: '비서의 역할을 한 줄로 설명해주세요 ✏️', color: '#0891B2', tail: 'bottom-right' as const, pos: 'bottom-[25%] left-[25%]' },
   },
   {
-    img: '/jpdc-ai/onboarding/create-step3.png',
+    img: `${import.meta.env.BASE_URL}onboarding/create-step3.png`,
     alt: '비서 초안 확인·수정',
     bubble: { text: '지침이 자동 입력되고 수정하실 수 있습니다', color: '#0891B2', tail: 'left' as const, pos: 'top-[48%] right-[3%]' },
   },
@@ -296,13 +296,13 @@ function CreateVisual() {
 /* ─── 비주얼 5: 비서 사용 (실제 스크린샷 2단계 수동 전환) ─── */
 const USE_SLIDES = [
   {
-    img: '/jpdc-ai/onboarding/use-step1.png',
+    img: `${import.meta.env.BASE_URL}onboarding/use-step1.png`,
     alt: '비서마켓 클릭',
     bubble: { text: '왼쪽 사이드바에서 비서마켓을 클릭하세요 🏪', color: '#16A34A', tail: 'top-left' as const, pos: 'top-[23%] left-[3%]' },
     clickEffect: { top: 'calc(15% - 0.11mm)', left: 'calc(1.2% - 0.11mm)', w: 137, h: 22, rounded: 'rounded-md' },
   },
   {
-    img: '/jpdc-ai/onboarding/use-step2.png',
+    img: `${import.meta.env.BASE_URL}onboarding/use-step2.png`,
     alt: '비서 카드 클릭 후 채팅 시작',
     bubble: { text: '채팅 시작을 누르면 바로 대화가 시작돼요 🚀', color: '#16A34A', tail: 'bottom-left' as const, pos: 'bottom-[18%] left-[32%]' },
     clickEffect: null,
