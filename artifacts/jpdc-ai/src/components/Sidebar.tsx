@@ -8,6 +8,7 @@ const INITIAL_HISTORY_GROUPS = [
   {
     label: '오늘',
     items: [
+      { title: '입고 처리가 안된 작업 방법알려줘', active: false, badge: '지침·ERP 선택' },
       { title: '입고 처리가 안 된 작업지시가 있어?', active: false, badge: 'RAG+TAG+비서' },
       { title: '공공기관 보안 지침에서 외부 반출 금지 자료의 범위는 어디까지인가요?', active: true },
       { title: '계약 협상 중인 단가 정보는 어떤 기준으로 보호되나요?', active: false },
@@ -38,6 +39,7 @@ const INITIAL_HISTORY_GROUPS = [
 ];
 
 const CLICKABLE_HISTORIES = new Set([
+  '입고 처리가 안된 작업 방법알려줘',
   '입고 처리가 안 된 작업지시가 있어?',
   '계약 협상 중인 단가 정보는 어떤 기준으로 보호되나요?',
   '회의록 작성 잘 하는법',

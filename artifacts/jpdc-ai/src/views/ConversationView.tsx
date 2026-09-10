@@ -31,6 +31,19 @@ const ANSWER_MAP: Record<string, { answer: string; sources: { title: string; typ
       { title: '검수·입고 확인 체크리스트', type: '체크리스트' },
     ],
   },
+  '입고 처리가 안된 작업 방법알려줘': {
+    answer: `입고 처리가 안 된 작업은 생산 완료 여부와 검수 결과를 먼저 확인한 뒤 처리합니다.
+
+1. 작업지시의 생산 완료 상태와 입고 대상 수량을 확인합니다.
+2. 검수 결과 및 실물 수량이 작업지시와 일치하는지 확인합니다.
+3. 이상이 없으면 ERP에서 입고 처리하고, 차이가 있으면 담당자 확인 후 보류합니다.
+
+검수 전이거나 수량이 맞지 않는 작업은 임의로 입고 처리하지 않아야 합니다.`,
+    sources: [
+      { title: '자재 입고 처리 업무 지침 제7조', type: '내부지침' },
+      { title: '검수·입고 확인 체크리스트', type: '체크리스트' },
+    ],
+  },
   '계약 협상 중인 단가 정보는 어떤 기준으로 보호되나요?': {
     answer: `계약 협상 중인 단가 정보는 공공기관 보안업무규정 및 계약사무처리규정에 따라 다음 기준으로 보호됩니다.
 
@@ -76,13 +89,16 @@ const DEFAULT_SOURCES = [
 
 function getAnswerData(query: string) {
   const normalized = normalizeRagTagQuery(query);
+  if (normalized.replace(/\s+/g, '') === ROUTE_SELECTION_QUERY.replace(/\s+/g, '')) {
+    return ANSWER_MAP[ROUTE_SELECTION_QUERY];
+  }
   return ANSWER_MAP[normalized] ?? { answer: DEFAULT_ANSWER, sources: DEFAULT_SOURCES };
 }
 
 /* ══════════════════════════════════════════════════════════════
    질의 분류 시스템
 ══════════════════════════════════════════════════════════════ */
-export type QueryKind = 'instruction' | 'assistant-select' | 'tag-stats' | 'tag-assistant' | 'dual-tag' | 'dual-tag-assistant' | 'ambiguous' | 'rag-ab' | 'rag-tag-assistant' | 'minutes-request' | 'minutes-result' | 'fallback' | 'fallback-assistant';
+export type QueryKind = 'instruction' | 'assistant-select' | 'tag-stats' | 'tag-assistant' | 'dual-tag' | 'dual-tag-assistant' | 'ambiguous' | 'route-select' | 'rag-ab' | 'rag-tag-assistant' | 'minutes-request' | 'minutes-result' | 'fallback' | 'fallback-assistant';
 
 // 특정 질의 → rag-ab 강제 분류
 const RAG_AB_QUERIES = new Set(['삼다수 브랜드 관리 지침 알려줘']);
@@ -90,6 +106,8 @@ const RAG_AB_QUERIES = new Set(['삼다수 브랜드 관리 지침 알려줘']);
 // 특정 질의 → RAG 지침 + TAG 현황 + 비서 추천 복합 출력
 const RAG_TAG_ASSISTANT_QUERY = '입고 처리가 안 된 작업지시가 있어?';
 const RAG_TAG_ASSISTANT_QUERIES = new Set([RAG_TAG_ASSISTANT_QUERY]);
+
+const ROUTE_SELECTION_QUERY = '입고 처리가 안된 작업 방법알려줘';
 
 function normalizeRagTagQuery(text: string): string {
   return text
@@ -115,6 +133,7 @@ const FALLBACK_ASSISTANT_QUERIES = new Set(['회의록 작성 잘 하는법']);
 
 function classifyQuery(text: string): QueryKind {
   const normalized = normalizeRagTagQuery(text);
+  if (normalized.replace(/\s+/g, '') === ROUTE_SELECTION_QUERY.replace(/\s+/g, '')) return 'route-select';
   if (RAG_AB_QUERIES.has(normalized)) return 'rag-ab';
   if (RAG_TAG_ASSISTANT_QUERIES.has(normalized)) return 'rag-tag-assistant';
   if (DUAL_TAG_ASSISTANT_QUERIES.has(normalized)) return 'dual-tag-assistant';
@@ -190,7 +209,7 @@ const INVENTORY_CANDIDATE: CandidateAssistant = {
 
 function getAssistantCandidates(query: string): CandidateAssistant[] {
   const t = query;
-  if (t.includes('입고') && t.includes('작업지시')) {
+  if (t.includes('입고') && (t.includes('작업지시') || t.includes('작업 방법'))) {
     return [INVENTORY_CANDIDATE, ...ALL_CANDIDATES.filter(c => ['meeting', 'press', 'email'].includes(c.id))];
   }
   return ALL_CANDIDATES
@@ -294,8 +313,9 @@ function getDualTagData(_query: string): DualTagData {
 
 function getTagStatsData(query: string): StatsData {
   const t = query;
+  const compact = t.replace(/\s+/g, '');
 
-  if (t.includes('입고') && t.includes('작업지시')) {
+  if (compact.includes('입고') && (compact.includes('작업지시') || compact.includes('작업방법'))) {
     return {
       answer: `입고 처리 상태를 작업지시 기준으로 조회했습니다.
 
@@ -718,6 +738,7 @@ const KIND_LABEL: Record<QueryKind, {
   'dual-tag':           { label: 'TAG 통계 질의',     color: '#4F46E5', bg: '#EEEEFF', border: '#C7C3F7', darkColor: '#A8A5FF', darkBg: '#1A1840', darkBorder: '#4A46A0' },
   'dual-tag-assistant': { label: 'TAG 분할+비서 추천', color: '#4F46E5', bg: '#EEEEFF', border: '#C7C3F7', darkColor: '#A8A5FF', darkBg: '#1A1840', darkBorder: '#4A46A0' },
   'ambiguous':          { label: '의도 불명확',       color: '#8B5CF6', bg: '#F5F3FF', border: '#DDD6FE', darkColor: '#C4B5FD', darkBg: '#1E1835', darkBorder: '#5B3DB0' },
+  'route-select':       { label: '질의 방향 확인',    color: '#4F46E5', bg: '#F0EEFF', border: '#C7C3F7', darkColor: '#A8A5FF', darkBg: '#1A1840', darkBorder: '#4A46A0' },
   'rag-ab':             { label: 'RAG A/B 비교',      color: '#0EA5E9', bg: '#F0F9FF', border: '#BAE6FD', darkColor: '#38BDF8', darkBg: '#0A1F30', darkBorder: '#0C5080' },
   'rag-tag-assistant':  { label: 'RAG+TAG+비서',      color: '#0F766E', bg: '#F0FDFA', border: '#99F6E4', darkColor: '#5EEAD4', darkBg: '#0B2926', darkBorder: '#17665D' },
   'minutes-request':    { label: '회의록 비서',       color: '#7C3AED', bg: '#F5F3FF', border: '#DDD6FE', darkColor: '#C4B5FD', darkBg: '#1E1835', darkBorder: '#5B2AC0' },
@@ -750,6 +771,12 @@ const THOUGHT_STEPS: Record<QueryKind, ThoughtStep[]> = {
     { kind: 'skill-group', skills: ['법령 검색 스킬', '비서 매칭 스킬', '의도 분류 스킬'] },
     { kind: 'thought', text: '두 경로 병렬 탐색 중 — 지침 DB + 비서 마켓 동시 조회' },
     { kind: 'result', text: '지침 찾기 + 비서 추천 동시 제시' },
+  ],
+  'route-select': [
+    { kind: 'thought', text: '질의 의도 분석: 입고 작업 방법과 ERP 현황 조회 가능성 감지' },
+    { kind: 'skill-group', skills: ['질의 의도 분류 스킬', '업무 데이터 구분 스킬'] },
+    { kind: 'thought', text: '답변 전에 조회 범위를 확인해야 하는 질의로 판단' },
+    { kind: 'result', text: '지침 또는 ERP 데이터 선택 요청' },
   ],
   'rag-ab': [
     { kind: 'thought', text: '질의 의도 분석: 지침 문의 — 복수 해석 경로 감지' },
@@ -1026,6 +1053,58 @@ function AssistantSelectPanel({
 /* ══════════════════════════════════════════════════════════════
    모호한 의도 — 좌(RAG 지침) + 우(비서 찾기) 분할 패널
 ══════════════════════════════════════════════════════════════ */
+type QueryRoute = 'instruction' | 'erp';
+
+function RouteSelectionPanel({
+  query,
+  onSelect,
+}: {
+  query: string;
+  onSelect: (route: QueryRoute) => void;
+}) {
+  return (
+    <div className="flex gap-3 items-start">
+      <div className="w-8 h-8 rounded-xl overflow-hidden shrink-0 shadow-sm shadow-[#4F46E5]/25 mt-0.5">
+        <img src={jpdcLogo} alt="JPDC AI" className="w-full h-full object-cover" />
+      </div>
+
+      <div className="flex-1 min-w-0">
+        <div className="bg-white border border-[#E4E2F0] rounded-2xl rounded-tl-sm px-5 py-4 shadow-sm">
+          <div className="flex items-center gap-2 mb-2.5">
+            <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[12px] font-semibold border text-[#4F46E5] bg-[#F0EEFF] border-[#C7C3F7]">
+              <MessageSquare className="w-3 h-3" strokeWidth={2} />
+              질의 방향 확인
+            </span>
+          </div>
+          <p className="text-[13.5px] text-[#1A1826] leading-relaxed mb-3.5">
+            <span className="font-semibold">"{query}"</span>에 대해 어떤 정보를 찾으시는지 아래에서 선택해 주세요.
+          </p>
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+            <button
+              type="button"
+              onClick={() => onSelect('instruction')}
+              className="flex items-center gap-2.5 px-3.5 py-3 rounded-xl border border-emerald-200 bg-emerald-50 text-left text-[12.5px] font-semibold text-emerald-700 hover:bg-emerald-100 hover:border-emerald-300 transition-colors"
+            >
+              <BookOpen className="w-4 h-4 shrink-0 text-emerald-600" strokeWidth={1.8} />
+              <span className="flex-1">지침을 찾으시는건가요?</span>
+              <ArrowRight className="w-3.5 h-3.5 shrink-0" strokeWidth={2} />
+            </button>
+            <button
+              type="button"
+              onClick={() => onSelect('erp')}
+              className="flex items-center gap-2.5 px-3.5 py-3 rounded-xl border border-blue-200 bg-blue-50 text-left text-[12.5px] font-semibold text-blue-700 hover:bg-blue-100 hover:border-blue-300 transition-colors"
+            >
+              <Database className="w-4 h-4 shrink-0 text-blue-600" strokeWidth={1.8} />
+              <span className="flex-1">ERP 데이터를 찾으시는건가요?</span>
+              <ArrowRight className="w-3.5 h-3.5 shrink-0" strokeWidth={2} />
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 function AmbiguousPanel({
   query,
   streaming,
@@ -2241,6 +2320,7 @@ type Message =
   | { role: 'assistant'; kind: 'tag-stats'; statsData: StatsData; streaming: boolean; appendSelectOnDone?: boolean }
   | { role: 'assistant'; kind: 'dual-tag'; dualData: DualTagData; streaming: boolean; appendSelectOnDone?: boolean }
   | { role: 'assistant'; kind: 'ambiguous'; query: string; streaming: boolean }
+  | { role: 'assistant'; kind: 'route-select'; query: string }
   | { role: 'assistant'; kind: 'rag-ab'; query: string; streamingA: boolean; streamingB: boolean; selected?: 'A' | 'B' }
   | { role: 'assistant'; kind: 'rag-tag-assistant'; query: string; streamingRag: boolean; streamingTag: boolean }
   | { role: 'assistant'; kind: 'assistant-intro'; name: string; starters: string[]; desc?: string }
@@ -2802,6 +2882,8 @@ export default function ConversationView({
         next[idx] = { role: 'assistant', kind: 'dual-tag', dualData: getDualTagData(query), streaming: true, appendSelectOnDone: true };
       } else if (queryKind === 'ambiguous') {
         next[idx] = { role: 'assistant', kind: 'ambiguous', query, streaming: true };
+      } else if (queryKind === 'route-select') {
+        next[idx] = { role: 'assistant', kind: 'route-select', query };
       } else if (queryKind === 'rag-ab') {
         next[idx] = { role: 'assistant', kind: 'rag-ab', query, streamingA: true, streamingB: true };
       } else if (queryKind === 'rag-tag-assistant') {
@@ -2829,6 +2911,26 @@ export default function ConversationView({
       const last = prev[prev.length - 1];
       if (last?.role === 'assistant' && last.kind === 'follow-up-prompt') return prev;
       return [...prev, { role: 'assistant', kind: 'follow-up-prompt' }];
+    });
+  }, []);
+
+  const handleRouteSelect = useCallback((idx: number, route: QueryRoute) => {
+    setMessages(prev => {
+      const next = [...prev];
+      const current = prev[idx];
+      if (current.role !== 'assistant' || current.kind !== 'route-select') return prev;
+
+      if (route === 'instruction') {
+        next[idx] = { role: 'assistant', kind: 'instruction', streaming: true };
+      } else {
+        next[idx] = {
+          role: 'assistant',
+          kind: 'tag-stats',
+          statsData: getTagStatsData(current.query),
+          streaming: true,
+        };
+      }
+      return next;
     });
   }, []);
 
@@ -3025,6 +3127,17 @@ export default function ConversationView({
                   query={userQuery}
                   candidates={msg.candidates}
                   onSelect={c => handleSelectAssistant(i, c)}
+                />
+              );
+            }
+
+            /* ── 입고 질의 방향 선택 ── */
+            if (msg.kind === 'route-select') {
+              return (
+                <RouteSelectionPanel
+                  key={i}
+                  query={msg.query}
+                  onSelect={route => handleRouteSelect(i, route)}
                 />
               );
             }

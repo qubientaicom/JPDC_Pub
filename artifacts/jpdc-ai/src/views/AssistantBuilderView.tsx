@@ -1,5 +1,5 @@
 import { useState, useRef, useEffect } from 'react';
-import { ArrowLeft, Send, Bot, Plus, X, Paperclip, Camera } from 'lucide-react';
+import { ArrowLeft, Send, Bot, Plus, X, Paperclip, Camera, CheckCircle2, WandSparkles } from 'lucide-react';
 import IconPickerModal, { type SelectedIcon } from '../components/IconPickerModal';
 import { isHanIcon, getHanChar } from '../data/materialIcons';
 
@@ -137,6 +137,36 @@ function generateDraft(userInput: string): DraftJson {
   };
 }
 
+function generateFieldContent(draft: DraftJson, category: string) {
+  const categoryName = category || '업무지원';
+  const assistantName = draft.name.trim() || `${categoryName} 비서`;
+  const purpose = draft.description.trim() || `${categoryName} 업무`;
+
+  return {
+    description: `${purpose.replace(/[.!?]+$/, '')}를 빠르고 정확하게 지원하는 ${assistantName}입니다.`.slice(0, 80),
+    instructions: [
+      `당신은 ${assistantName}입니다.`,
+      `- 사용자의 ${purpose.replace(/[.!?]+$/, '')} 관련 요청을 정확하게 파악하고 실무에 바로 활용할 수 있도록 답변합니다.`,
+      '- 답변은 핵심 내용을 먼저 제시하고 필요한 절차나 근거를 단계별로 설명합니다.',
+      '- 불확실하거나 확인이 필요한 내용은 추측하지 않고 필요한 추가 정보를 요청합니다.',
+      '- 전문 용어는 이해하기 쉬운 표현으로 풀어 설명하고, 필요한 경우 예시를 함께 제공합니다.',
+      '- 답변 마지막에는 사용자가 이어서 수행할 수 있는 다음 단계를 간단히 안내합니다.',
+    ].join('\n'),
+    prohibitions: [
+      '확인되지 않은 정보를 사실처럼 단정하지 않습니다.',
+      '사용자의 요청과 무관한 내용이나 불필요한 개인정보를 포함하지 않습니다.',
+      '권한이 없거나 근거를 확인할 수 없는 업무를 임의로 처리하지 않습니다.',
+    ],
+    conversationStarters: [
+      `${purpose.replace(/[.!?]+$/, '')}에 대해 핵심만 정리해 주세요.`,
+      '이 업무를 처리하는 절차를 단계별로 알려주세요.',
+      '관련 기준과 확인해야 할 사항을 알려주세요.',
+      '실무에 바로 사용할 수 있는 예시를 만들어 주세요.',
+    ],
+    firstMessage: `안녕하세요! ${assistantName}입니다. ${purpose.replace(/[.!?]+$/, '')}와 관련해 무엇을 도와드릴까요?`,
+  };
+}
+
 /* ─── 서브 컴포넌트 ─── */
 function Label({ children, required }: { children: React.ReactNode; required?: boolean }) {
   return (
@@ -149,6 +179,154 @@ function Label({ children, required }: { children: React.ReactNode; required?: b
 
 function SectionWrap({ children }: { children: React.ReactNode }) {
   return <div className="space-y-1">{children}</div>;
+}
+
+function AutoGenerateButton({ onClick }: { onClick: () => void }) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      className="flex shrink-0 items-center gap-1.5 rounded-lg border border-[#DCD8FF] bg-[#F4F2FF] px-2.5 py-1.5 text-[11px] font-semibold text-[#5B4BEA] transition-colors hover:border-[#AFA7FF] hover:bg-[#ECE9FF]"
+    >
+      <WandSparkles className="h-3.5 w-3.5" strokeWidth={1.9} />
+      자동생성
+    </button>
+  );
+}
+
+type TestMessage = { role: 'assistant' | 'user'; text: string };
+
+function buildTestReply(draft: DraftJson, question: string) {
+  const instructionSummary = draft.instructions
+    .split('\n')
+    .map(line => line.replace(/^[-•]\s*/, '').trim())
+    .filter(Boolean)[0];
+  const prohibition = draft.prohibitions[0];
+
+  return [
+    `[데모 테스트 응답] ${draft.name || '새 비서'}가 입력을 받았습니다.`,
+    `질문: ${question}`,
+    instructionSummary ? `적용 지침: ${instructionSummary}` : '아직 저장된 지침이 없어 기본 응답으로 처리했습니다.',
+    prohibition ? `주의사항도 적용합니다: ${prohibition}` : '',
+    '',
+    '실제 공개 후에는 연결된 지식, MCP/API, 모델 설정을 사용해 답변합니다.',
+  ].filter(Boolean).join('\n');
+}
+
+function AssistantTestPanel({
+  enabled,
+  assistantName,
+  messages,
+  input,
+  isResponding,
+  onInputChange,
+  onSend,
+}: {
+  enabled: boolean;
+  assistantName: string;
+  messages: TestMessage[];
+  input: string;
+  isResponding: boolean;
+  onInputChange: (value: string) => void;
+  onSend: () => void;
+}) {
+  return (
+    <aside className="flex w-full lg:w-[44%] min-h-[420px] lg:min-h-0 flex-col border-t lg:border-t-0 lg:border-l border-[#E4E2F0] bg-[#FBFAFF] shrink-0">
+      <div className="h-12 flex items-center gap-2 px-4 border-b border-[#E4E2F0] bg-white shrink-0">
+        <span className="text-[13px] font-bold text-[#1A1826]">테스트 패널</span>
+        <span className={`text-[10px] font-semibold px-2 py-1 rounded-full ${
+          enabled
+            ? 'bg-[#ECFDF3] text-[#15803D]'
+            : 'bg-[#F4F3FC] text-[#8B88A2]'
+        }`}>
+          {enabled ? '활성화됨' : '저장 후 활성화'}
+        </span>
+        {enabled && (
+          <span className="ml-auto text-[11px] text-[#8B88A2] truncate">
+            {assistantName || '새 비서'}
+          </span>
+        )}
+      </div>
+
+      <div className="flex-1 min-h-0 overflow-y-auto px-4 py-5" style={{ scrollbarWidth: 'thin' }}>
+        {!enabled ? (
+          <div className="h-full min-h-[300px] flex items-center justify-center text-center">
+            <div className="space-y-2">
+              <div className="w-10 h-10 mx-auto rounded-2xl bg-[#F0EEFF] text-[#6B5CF0] flex items-center justify-center">
+                <Bot className="w-5 h-5" strokeWidth={1.7} />
+              </div>
+              <p className="text-[13px] font-medium text-[#6B6882]">저장 후 테스트할 수 있습니다.</p>
+              <p className="text-[11px] text-[#A8A6C0]">지침과 설정을 저장하면 이곳에서 바로 확인할 수 있어요.</p>
+            </div>
+          </div>
+        ) : (
+          <div className="space-y-4">
+            {messages.map((message, index) => (
+              <div key={`${message.role}-${index}`} className={`flex gap-2.5 ${message.role === 'user' ? 'justify-end' : ''}`}>
+                {message.role === 'assistant' && (
+                  <div className="w-7 h-7 rounded-full bg-[#5B4BEA] flex items-center justify-center shrink-0 mt-0.5">
+                    <Bot className="w-3.5 h-3.5 text-white" strokeWidth={1.8} />
+                  </div>
+                )}
+                <div className={`max-w-[86%] rounded-2xl px-3.5 py-2.5 text-[12px] leading-relaxed whitespace-pre-line ${
+                  message.role === 'assistant'
+                    ? 'rounded-tl-sm bg-white border border-[#E4E2F0] text-[#2A2838]'
+                    : 'rounded-tr-sm bg-[#5B4BEA] text-white'
+                }`}>
+                  {message.text}
+                </div>
+              </div>
+            ))}
+            {isResponding && (
+              <div className="flex items-center gap-2.5">
+                <div className="w-7 h-7 rounded-full bg-[#5B4BEA] flex items-center justify-center shrink-0">
+                  <Bot className="w-3.5 h-3.5 text-white" strokeWidth={1.8} />
+                </div>
+                <div className="flex gap-1 px-3.5 py-3 rounded-2xl rounded-tl-sm bg-white border border-[#E4E2F0]">
+                  {[0, 1, 2].map(i => (
+                    <span key={i} className="w-1.5 h-1.5 rounded-full bg-[#786AF2] animate-bounce" style={{ animationDelay: `${i * 0.16}s` }} />
+                  ))}
+                </div>
+              </div>
+            )}
+          </div>
+        )}
+      </div>
+
+      <div className="p-3 border-t border-[#E4E2F0] bg-white shrink-0">
+        <div className={`flex items-end gap-2 rounded-xl border px-3 py-2 transition-colors ${
+          enabled
+            ? 'border-[#E4E2F0] focus-within:border-[#5B4BEA]'
+            : 'border-[#E9E8F0] bg-[#F7F6FB]'
+        }`}>
+          <textarea
+            value={input}
+            disabled={!enabled || isResponding}
+            onChange={e => onInputChange(e.target.value)}
+            onKeyDown={e => {
+              if (e.key === 'Enter' && !e.shiftKey) {
+                e.preventDefault();
+                onSend();
+              }
+            }}
+            rows={1}
+            placeholder={enabled ? '무엇이든 물어보세요… (Shift+Enter 줄바꿈)' : '저장 후 테스트할 수 있습니다.'}
+            className="flex-1 min-w-0 resize-none outline-none bg-transparent text-[12px] text-[#2A2838] placeholder:text-[#A8A6C0] leading-relaxed disabled:cursor-not-allowed"
+          />
+          <button
+            type="button"
+            aria-label="테스트 질문 보내기"
+            disabled={!enabled || !input.trim() || isResponding}
+            onClick={onSend}
+            className="w-8 h-8 rounded-lg bg-[#5B4BEA] text-white flex items-center justify-center shrink-0 transition-colors hover:bg-[#4939D2] disabled:opacity-35 disabled:cursor-not-allowed"
+          >
+            <Send className="w-3.5 h-3.5" strokeWidth={2} />
+          </button>
+        </div>
+        <p className="mt-1.5 text-[10px] text-[#A8A6C0] text-center">테스트 응답은 현재 편집 중인 설정을 기준으로 생성됩니다.</p>
+      </div>
+    </aside>
+  );
 }
 
 /* ─── 메인 컴포넌트 ─── */
@@ -175,6 +353,12 @@ export default function AssistantBuilderView({ onBack, initialDraft, editMode = 
     knowledge_files: [], first_message: '',
     use_foundation_model: true,
   });
+  const [isTestEnabled, setIsTestEnabled] = useState(false);
+  const [testInput, setTestInput] = useState('');
+  const [testMessages, setTestMessages] = useState<TestMessage[]>([]);
+  const [isTestResponding, setIsTestResponding] = useState(false);
+  const [saveNotice, setSaveNotice] = useState('');
+  const [approvalRequested, setApprovalRequested] = useState(false);
   const [category, setCategory] = useState('');
  
   const [visibility, setVisibility] = useState<'private' | 'designated' | 'department' | 'division' | 'company'>('private');
@@ -211,6 +395,36 @@ export default function AssistantBuilderView({ onBack, initialDraft, editMode = 
     }, 1600);
   };
 
+  const handleSave = () => {
+    if (!draft.name.trim() || !draft.instructions.trim()) return;
+    setIsTestEnabled(true);
+    setApprovalRequested(false);
+    setSaveNotice(requestReview
+      ? '저장했습니다. 사용하려면 관리자 승인 요청이 필요합니다.'
+      : '저장했습니다. 승인 없이 바로 사용할 수 있습니다.');
+    setTestMessages(prev => prev.length > 0
+      ? prev
+      : [{ role: 'assistant', text: draft.first_message || `${draft.name} 테스트를 시작해 보세요. 지침에 맞춰 응답합니다.` }]);
+  };
+
+  const handleApprovalRequest = () => {
+    if (!saveNotice || !requestReview || approvalRequested) return;
+    setApprovalRequested(true);
+    setSaveNotice('관리자 승인 요청을 접수했습니다.');
+  };
+
+  const handleTestSend = () => {
+    const question = testInput.trim();
+    if (!question || !isTestEnabled || isTestResponding) return;
+    setTestMessages(prev => [...prev, { role: 'user', text: question }]);
+    setTestInput('');
+    setIsTestResponding(true);
+    window.setTimeout(() => {
+      setTestMessages(prev => [...prev, { role: 'assistant', text: buildTestReply(draft, question) }]);
+      setIsTestResponding(false);
+    }, 550);
+  };
+
   /* ── 금지사항 추가 ── */
   const addProhib = () => {
     if (!prohibInput.trim()) return;
@@ -230,7 +444,7 @@ export default function AssistantBuilderView({ onBack, initialDraft, editMode = 
   ══════════════════════════════════ */
   if (step === 'chat') {
     return (
-      <div className="flex-1 flex flex-col h-full bg-white min-w-0 overflow-hidden">
+      <div className="relative flex-1 flex flex-col h-full bg-white min-w-0 overflow-hidden">
         {/* Header */}
         <div className="h-12 flex items-center gap-3 px-4 md:px-6 border-b border-[#E4E2F0] shrink-0">
           <button onClick={onBack}
@@ -315,7 +529,7 @@ export default function AssistantBuilderView({ onBack, initialDraft, editMode = 
   const canCreate = draft.name.trim().length > 0 && draft.instructions.trim().length > 0;
 
   return (
-    <div className="flex-1 flex flex-col h-full bg-white min-w-0 overflow-hidden">
+    <div className="relative flex-1 flex flex-col h-full bg-white min-w-0 overflow-hidden">
       {/* Header */}
       <div className="h-12 flex items-center gap-3 px-4 md:px-6 border-b border-[#E4E2F0] shrink-0">
         <button onClick={editMode ? onBack : () => setStep('chat')}
@@ -329,10 +543,20 @@ export default function AssistantBuilderView({ onBack, initialDraft, editMode = 
         <p className="ml-auto text-[12px] text-[#A8A6C0] hidden sm:block">
           {editMode ? '수정 후 저장하세요' : 'AI가 초안을 생성했습니다 · 내용을 확인하고 수정하세요'}
         </p>
+          <button
+            type="button"
+            onClick={handleSave}
+            disabled={!canCreate}
+            className="hidden sm:flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-[#5B4BEA] hover:bg-[#4939D2] text-white text-[12px] font-semibold disabled:opacity-40 disabled:cursor-not-allowed"
+          >
+            <CheckCircle2 className="w-3.5 h-3.5" strokeWidth={1.9} />
+            저장
+          </button>
       </div>
 
-      {/* 폼 스크롤 영역 */}
-      <div className="flex-1 overflow-y-auto overscroll-contain px-4 md:px-8 py-6 space-y-7" style={{ scrollbarWidth: 'none' }}>
+      <div className="flex-1 min-h-0 flex flex-col lg:flex-row overflow-hidden">
+        {/* 폼 스크롤 영역 */}
+        <div className="flex-1 min-w-0 overflow-y-auto overscroll-contain px-4 md:px-8 py-6 space-y-7" style={{ scrollbarWidth: 'none' }}>
 
         {/* ① 기본 정보 */}
         <section>
@@ -441,7 +665,13 @@ export default function AssistantBuilderView({ onBack, initialDraft, editMode = 
               <p className="text-[11px] text-[#A8A6C0] text-right">{draft.name.length}/20</p>
             </SectionWrap>
             <SectionWrap>
-              <Label>설명</Label>
+              <div className="flex items-start justify-between gap-2">
+                <Label>설명</Label>
+                <AutoGenerateButton onClick={() => {
+                  const generated = generateFieldContent(draft, category);
+                  setDraft(d => ({ ...d, description: generated.description }));
+                }} />
+              </div>
               <input value={draft.description}
                 onChange={e => setDraft(d => ({ ...d, description: e.target.value.slice(0, 80) }))}
                 placeholder="한 문장 설명 (최대 80자)"
@@ -471,7 +701,13 @@ export default function AssistantBuilderView({ onBack, initialDraft, editMode = 
 
         {/* ③ 지침 */}
         <section>
-          <Label required>지침 (Instructions)</Label>
+          <div className="flex items-start justify-between gap-2">
+            <Label required>지침 (Instructions)</Label>
+            <AutoGenerateButton onClick={() => {
+              const generated = generateFieldContent(draft, category);
+              setDraft(d => ({ ...d, instructions: generated.instructions }));
+            }} />
+          </div>
           <p className="text-[12px] text-[#A8A6C0] mb-1.5">
             비서의 역할, 전문성, 응답 방식, 불확실 시 처리 방법 등을 지정합니다.
           </p>
@@ -483,7 +719,13 @@ export default function AssistantBuilderView({ onBack, initialDraft, editMode = 
 
         {/* ④ 금지 사항 */}
         <section>
-          <Label>금지 사항</Label>
+          <div className="flex items-start justify-between gap-2 mb-3">
+            <Label>금지 사항</Label>
+            <AutoGenerateButton onClick={() => {
+              const generated = generateFieldContent(draft, category);
+              setDraft(d => ({ ...d, prohibitions: generated.prohibitions }));
+            }} />
+          </div>
           {draft.prohibitions.length > 0 && (
             <div className="space-y-1.5 mb-2">
               {draft.prohibitions.map((p, i) => (
@@ -511,7 +753,13 @@ export default function AssistantBuilderView({ onBack, initialDraft, editMode = 
 
         {/* ⑤ 대화 스타터 */}
         <section>
-          <Label>대화 스타터</Label>
+          <div className="flex items-start justify-between gap-2 mb-3">
+            <Label>대화 스타터</Label>
+            <AutoGenerateButton onClick={() => {
+              const generated = generateFieldContent(draft, category);
+              setDraft(d => ({ ...d, conversation_starters: generated.conversationStarters }));
+            }} />
+          </div>
           {draft.conversation_starters.length > 0 && (
             <div className="space-y-1.5 mb-2">
               {draft.conversation_starters.map((s, i) => (
@@ -722,7 +970,13 @@ export default function AssistantBuilderView({ onBack, initialDraft, editMode = 
 
         {/* ⑦ 첫 메시지 */}
         <section>
-          <Label>첫 메시지 (인사말)</Label>
+          <div className="flex items-start justify-between gap-2">
+            <Label>첫 메시지 (인사말)</Label>
+            <AutoGenerateButton onClick={() => {
+              const generated = generateFieldContent(draft, category);
+              setDraft(d => ({ ...d, first_message: generated.firstMessage }));
+            }} />
+          </div>
           <p className="text-[12px] text-[#A8A6C0] mb-1.5">
             비서를 처음 열었을 때 자동으로 표시되는 인사말입니다. (선택)
           </p>
@@ -767,6 +1021,8 @@ export default function AssistantBuilderView({ onBack, initialDraft, editMode = 
                   onChange={() => {
                     setVisibility(v.value);
                     setRequestReview(v.needsReview);
+                    setApprovalRequested(false);
+                    setSaveNotice('');
                   }}
                   className="sr-only" />
                 <div className={`w-4 h-4 rounded-full border-2 flex items-center justify-center shrink-0 ${
@@ -788,18 +1044,28 @@ export default function AssistantBuilderView({ onBack, initialDraft, editMode = 
           </div>
 
           {requestReview && (
-            <label className="flex items-center gap-2.5 mt-3 p-3 border border-[#FDE68A] bg-[#FFFBEB] rounded-xl cursor-pointer">
-              <input type="checkbox" checked={requestReview}
-                onChange={e => setRequestReview(e.target.checked)}
-                className="w-4 h-4 accent-[#4F46E5]" />
+            <div className="flex items-center gap-2.5 mt-3 p-3 border border-[#FDE68A] bg-[#FFFBEB] rounded-xl">
+              <CheckCircle2 className="w-4 h-4 shrink-0 text-[#D97706]" strokeWidth={2} />
               <span className="text-[13px] text-[#92400E]">
-                관리자 심의 신청 — 승인 완료 후 공개됩니다
+                이 공개 범위는 저장 후 관리자 승인을 요청해야 사용할 수 있습니다.
               </span>
-            </label>
+            </div>
           )}
         </section>
 
         <div className="h-2" />
+          <div className="h-2" />
+        </div>
+
+        <AssistantTestPanel
+          enabled={isTestEnabled}
+          assistantName={draft.name}
+          messages={testMessages}
+          input={testInput}
+          isResponding={isTestResponding}
+          onInputChange={setTestInput}
+          onSend={handleTestSend}
+        />
       </div>
 
       {/* ── 하단 액션 바 ── */}
@@ -809,16 +1075,39 @@ export default function AssistantBuilderView({ onBack, initialDraft, editMode = 
           취소
         </button>
         <div className="flex gap-2">
+          {saveNotice && requestReview && (
+            <button
+              type="button"
+              onClick={handleApprovalRequest}
+              disabled={approvalRequested}
+              className="flex items-center gap-1.5 px-4 py-2.5 rounded-xl border border-[#4F46E5] text-[14px] font-semibold text-[#4F46E5] hover:bg-[#F4F3FC] transition-colors disabled:border-[#C7C3F7] disabled:bg-[#F4F3FC] disabled:text-[#8A84C7] disabled:cursor-not-allowed"
+            >
+              <CheckCircle2 className="w-4 h-4" strokeWidth={2} />
+              {approvalRequested ? '승인 요청됨' : '승인요청'}
+            </button>
+          )}
           <button
+            onClick={handleSave}
+            disabled={!canCreate}
             className="px-4 py-2.5 rounded-xl border border-[#E4E2F0] text-[14px] font-semibold text-[#6B6882] hover:bg-[#F4F3FC] transition-colors">
             임시저장
           </button>
-          <button disabled={!canCreate} onClick={editMode ? onBack : undefined}
+          <button disabled={!canCreate} onClick={handleSave}
             className="px-5 py-2.5 rounded-xl bg-[#4F46E5] hover:bg-[#4338CA] text-white text-[14px] font-semibold transition-colors shadow-sm shadow-[#4F46E5]/20 disabled:opacity-40 disabled:cursor-not-allowed">
-            {editMode ? '저장' : '만들기'}
+            {saveNotice
+              ? (requestReview
+                ? (approvalRequested ? '저장됨 · 승인 대기' : '저장됨 · 승인 필요')
+                : '저장됨 · 바로 사용 가능')
+              : (editMode ? '저장' : '만들기')}
           </button>
         </div>
       </div>
+      {saveNotice && (
+        <div className="absolute bottom-[76px] left-1/2 -translate-x-1/2 z-10 flex items-center gap-2 px-3 py-2 rounded-lg bg-[#1F2937] text-white text-[11px] shadow-lg">
+          <CheckCircle2 className="w-3.5 h-3.5 text-[#86EFAC]" strokeWidth={2} />
+          {saveNotice}
+        </div>
+      )}
 
       {/* ── 아이콘 피커 모달 ── */}
       <IconPickerModal

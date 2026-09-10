@@ -6,117 +6,137 @@ id = "NFQ9YtYKfzduHOIjmMci5"
 uri = "file://screenshots/design1-chat-interface.jpg"
 type = "image"
 title = "디자인 1 — Chat Interface"
+logical_id = "ed6ddc53-929f-4fe8-b861-226a7c31e5b4"
 
 [[outputs]]
 id = "4lA1_aN39gNz2JtV-WTbG"
 uri = "file://screenshots/design2-instrument-panel.jpg"
 type = "image"
 title = "디자인 2 — Instrument Panel"
+logical_id = "81b63ca1-aa92-4d42-b4a9-ab40a9916e35"
 
 [[outputs]]
 id = "wDFVo0sdFIt9QzVAQOBfR"
 uri = "file://screenshots/design3-light-workspace.jpg"
 type = "image"
 title = "디자인 3 — Light Workspace"
+logical_id = "ad398ff0-7586-4acf-a786-37325a3e40ed"
 
 [[outputs]]
 id = "Z3HCGyR9X-_WcKqerv_rS"
 uri = "file://screenshots/design4-best-of.jpg"
 type = "image"
 title = "디자인 4 — 통합 시안 (Best Of)"
+logical_id = "472eb647-7bb8-4df4-8a05-6a21f6db42c0"
 
 [[outputs]]
 id = "zgBNmTuEcJUz2eTO1Ag-H"
 uri = "file://screenshots/design5-landing-hero.jpg"
 type = "image"
 title = "디자인 5 — Landing Hero (스플릿 랜딩)"
+logical_id = "0004d627-ce8d-43bf-b8a8-9dc2af175b17"
 
 [[outputs]]
 id = "tJ0Rnn5oLHgF03J7NWo2l"
 uri = "file://screenshots/design1-ChatInterface.jpg"
 type = "image"
 title = "디자인 1 — Chat Interface"
+logical_id = "e6b1f723-bd47-4387-a17d-74a285df2701"
 
 [[outputs]]
 id = "9IQqqPAnFOWLP2orrbLGI"
 uri = "file://screenshots/design2-InstrumentPanel.jpg"
 type = "image"
 title = "Design 2 · InstrumentPanel"
+logical_id = "27c3377d-a799-450f-bc00-22295d883d7c"
 
 [[outputs]]
 id = "RxHe0_K7WsKfBepOiFo-3"
 uri = "file://screenshots/design3-LightWorkspace.jpg"
 type = "image"
 title = "Design 3 · LightWorkspace"
+logical_id = "f50523e6-0634-428e-8640-e49430d6f08f"
 
 [[outputs]]
 id = "JRf2P0FoSQHFoQ9U3e1zx"
 uri = "file://screenshots/design4-BestOf.jpg"
 type = "image"
 title = "Design 4 · BestOf"
+logical_id = "a92c0cac-5e85-4c84-aab4-a7c5caa25bc4"
 
 [[outputs]]
 id = "9Icblbfz92uNBpg_oStGB"
 uri = "file://screenshots/design5-LandingHero.jpg"
 type = "image"
 title = "Design 5 · LandingHero"
+logical_id = "1fbc0e51-2078-4eb3-bd76-a0355a901bd2"
 
 [[outputs]]
 id = "nr2EyezvT11BryhpD0x2q"
 uri = "file://screenshots/design2-BestOf.jpg"
 type = "image"
 title = "디자인 2 — Best Of"
+logical_id = "d119a963-ced5-4966-bd12-b48b830c6fa0"
 
 [[outputs]]
 id = "Q4SRtMIAyFRc_0dQQ3oAI"
 uri = "file://screenshots/design3-MarketplaceHub.jpg"
 type = "image"
 title = "디자인 3 — Marketplace Hub"
+logical_id = "522c121e-9d53-4c52-b7dd-eab80f13fde5"
 
 [[outputs]]
 id = "gs-2jRgELOBgY7qz8oW5L"
 uri = "file://screenshots/design4-LandingHero.jpg"
 type = "image"
 title = "디자인 4 — Landing Hero"
+logical_id = "b0d62772-fb95-4099-8bce-bbab6906033e"
 
 [[outputs]]
 id = "-7IQ_YecHpyhmuCzMVrMZ"
 uri = "file://screenshots/design1-ext-ChatInterfaceFlyout.jpg"
 type = "image"
 title = "디자인 1 확장 — 새 대화 시작 토글"
+logical_id = "9e7fa1f1-d064-4bae-b2e8-c939b3454502"
 
 [[outputs]]
 id = "gdb8w9NBhUw-znyckBbYq"
 uri = "file://screenshots/design2-ext-ConversationViewBestOf.jpg"
 type = "image"
 title = "디자인 2 확장 — 질의응답 화면"
+logical_id = "72bf63a8-19e0-4507-905d-3d3fe2a84cce"
 
 [[outputs]]
 id = "KuumIZsGT-CJXmNy-h-jj"
 uri = "file://screenshots/design3-ext-ConversationViewMarketplace.jpg"
 type = "image"
 title = "디자인 3 확장 — 질의응답 화면"
+logical_id = "57357276-5875-4356-a5a2-e58477f48d8d"
 
 [[outputs]]
 id = "rddED34LUwhgZwaRMTm1t"
 uri = "file://screenshots/design4-ext-ConversationView.jpg"
 type = "image"
 title = "디자인 4 확장 — 질의응답 화면"
+logical_id = "b1d4a16a-2880-47b4-ab92-0f0f62e9aae6"
 
 [[outputs]]
 id = "yX-yEEPnpx-PkvCKrjnJe"
 uri = "file://screenshots/final-01-%EB%A9%94%EC%9D%B8%ED%99%94%EB%A9%B4.jpg"
 type = "image"
 title = "최종 선택안 01 — 메인화면"
+logical_id = "7f72ff28-ad2c-43cd-8ac4-65f9be632e58"
 
 [[outputs]]
 id = "TDhpgniyPszAo_uRzXuRw"
 uri = "file://screenshots/final-02-%EB%B9%84%EC%84%9C%EB%A7%88%EC%BC%93.jpg"
 type = "image"
 title = "최종 선택안 02 — 비서마켓"
+logical_id = "555ba40d-d90e-42cf-ac2c-6d5e82276de5"
 
 [[outputs]]
 id = "VO3hxP0V-2akj3ZeYa1Aa"
 uri = "file://screenshots/final-03-%EC%82%AC%EC%9D%B4%EB%93%9C%EB%B0%94%EC%A0%91%EA%B8%B0.jpg"
 type = "image"
 title = "최종 선택안 03 — 사이드바 접기"
+logical_id = "a2ef4ad7-f7fb-4507-8b7f-43589146cf16"
