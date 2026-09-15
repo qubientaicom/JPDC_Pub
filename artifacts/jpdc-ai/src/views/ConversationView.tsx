@@ -2323,7 +2323,7 @@ type Message =
   | { role: 'assistant'; kind: 'route-select'; query: string }
   | { role: 'assistant'; kind: 'rag-ab'; query: string; streamingA: boolean; streamingB: boolean; selected?: 'A' | 'B' }
   | { role: 'assistant'; kind: 'rag-tag-assistant'; query: string; streamingRag: boolean; streamingTag: boolean }
-  | { role: 'assistant'; kind: 'assistant-intro'; name: string; starters: string[]; desc?: string }
+  | { role: 'assistant'; kind: 'assistant-intro'; name: string; starters: string[]; desc?: string; switchNotice?: string }
   | { role: 'assistant'; kind: 'minutes-request'; streaming: boolean }
   | { role: 'assistant'; kind: 'minutes-result'; streaming: boolean }
   | { role: 'assistant'; kind: 'fallback'; streaming: boolean }
@@ -2337,7 +2337,20 @@ const MY_ASSISTANT_STARTERS: Record<string, string[]> = {
   '회의록 문장정리': ['오늘 계약 검토 회의 내용을 정리해 줘', '안건 3개로 구성된 회의록 초안을 작성해 줘', '액션아이템만 따로 추출해 줄 수 있어?'],
   '이메일 문체변경': ['이 이메일을 정중한 격식체로 바꿔줘', '비격식 친근한 문체로 변환해 줘', '영어 이메일을 한국어 공문 스타일로 바꿔줘'],
   '번역':           ['이 영어 이메일을 자연스러운 한국어로 번역해 줘', '계약서 일부를 영어로 번역해 줘', '일본어 공문서를 번역해 줘'],
+  '번역 비서':      ['이 영어 이메일을 자연스러운 한국어로 번역해 줘', '계약서 일부를 영어로 번역해 줘', '일본어 공문서를 번역해 줘'],
   '보도자료':       ['신제품 출시 보도자료를 작성해 줘', '이 내용을 언론 배포용 문체로 다듬어 줘', '보도자료 제목 후보 5개를 만들어 줘'],
+  '코드 최적화':    ['이 코드의 성능 병목을 찾아 개선해 줘', '중복 코드를 줄이고 읽기 쉽게 정리해 줘', '오류 가능성이 있는 부분을 검토해 줘'],
+  '문서 요약 비서': ['첨부 문서의 핵심 내용을 요약해 줘', '주요 결정사항과 후속 조치를 정리해 줘', '보고용으로 한 페이지 분량으로 요약해 줘'],
+};
+
+const MY_ASSISTANT_DESCRIPTIONS: Record<string, string> = {
+  '회의록 문장정리': '회의 내용을 체계적이고 보기 좋은 문서로 자동 정리합니다. 핵심 안건·결정사항·액션아이템을 추출해 보고서 품질을 높여 드립니다.',
+  '이메일 문체변경': '이메일의 목적과 상대방에 맞춰 정중한 격식체, 친근한 문체 또는 공문 스타일로 자연스럽게 다듬어 드립니다.',
+  '번역': '문맥과 전문 용어를 고려해 자연스럽고 정확한 다국어 번역을 제공합니다.',
+  '번역 비서': '문맥과 전문 용어를 고려해 자연스럽고 정확한 다국어 번역을 제공합니다.',
+  '보도자료': '핵심 메시지가 명확하게 전달되는 언론 배포용 보도자료를 작성하고 문체를 다듬어 드립니다.',
+  '코드 최적화': '코드의 오류와 성능 병목을 분석하고 읽기 쉽고 유지보수하기 좋은 구조로 개선해 드립니다.',
+  '문서 요약 비서': '긴 문서에서 핵심 내용, 주요 결정사항과 후속 조치를 빠르게 추출해 간결하게 정리합니다.',
 };
 
 /* 파일 크기 포맷 */
@@ -2370,10 +2383,14 @@ function InputBar({
   onSend,
   focusRequest = 0,
   awaitingFollowUp = false,
+  activeAssistantName = null,
+  assistantOrder = [],
 }: {
   onSend: (text: string, assistantName?: string | null) => void;
   focusRequest?: number;
   awaitingFollowUp?: boolean;
+  activeAssistantName?: string | null;
+  assistantOrder?: string[];
 }) {
   const [value, setValue] = useState('');
   const [assistantOpen, setAssistantOpen] = useState(false);
@@ -2382,6 +2399,10 @@ function InputBar({
   const fileInputRef = useRef<HTMLInputElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const nextId = useRef(0);
+  const displayedAssistantName = selectedAssistant ?? activeAssistantName;
+  const isPendingAssistantChange = Boolean(
+    selectedAssistant && selectedAssistant !== activeAssistantName
+  );
 
   useEffect(() => {
     if (focusRequest === 0) return;
@@ -2466,9 +2487,21 @@ function InputBar({
       <div className="max-w-[920px] mx-auto">
         <div className="bg-white rounded-2xl border border-[#E4E2F0] shadow-sm hover:border-[#C7C3F7] focus-within:border-[#4F46E5] focus-within:shadow-[0_0_0_3px_rgba(79,70,229,0.08)] transition-all">
 
-          {/* 첨부 파일 목록 */}
-          {attachedFiles.length > 0 && (
+          {/* 선택된 비서 및 첨부 파일 목록 */}
+          {(displayedAssistantName || attachedFiles.length > 0) && (
             <div className="flex flex-wrap gap-2 px-4 pt-3 pb-1">
+              {displayedAssistantName && (
+                <div
+                  className="flex h-fit max-w-full min-w-0 items-center gap-1.5 rounded-lg border border-[#C7C3F7] bg-[#EEEEFF] px-2.5 py-2 text-[#4F46E5]"
+                  title={displayedAssistantName}
+                >
+                  <Users className="h-3.5 w-3.5 shrink-0" strokeWidth={1.9} />
+                  <span className="max-w-[220px] truncate text-[12px] font-semibold">
+                    {displayedAssistantName}
+                  </span>
+                  <span className="shrink-0 text-[10px] font-medium text-[#8A84C7]">비서</span>
+                </div>
+              )}
               {attachedFiles.map(entry => {
                 const { bg, text } = fileAccentColor(entry.file.name);
                 const ext = entry.file.name.split('.').pop()?.toUpperCase() ?? 'FILE';
@@ -2529,6 +2562,15 @@ function InputBar({
             </div>
           )}
 
+          {isPendingAssistantChange && (
+            <div className="mx-4 mt-2 flex items-start gap-2 rounded-xl border border-[#D9D6F5] bg-[#F7F6FF] px-3.5 py-2.5">
+              <Users className="mt-0.5 h-3.5 w-3.5 shrink-0 text-[#4F46E5]" strokeWidth={2} />
+              <p className="text-[11.5px] font-medium leading-relaxed text-[#6B6882]">
+                질문을 전송하면 기존 대화는 저장되고, <span className="font-semibold text-[#4F46E5]">{selectedAssistant}</span>과의 새 대화가 시작됩니다.
+              </p>
+            </div>
+          )}
+
           {/* 텍스트 입력 */}
           <textarea ref={textareaRef} value={value} onChange={e => setValue(e.target.value)} onKeyDown={handleKey}
             className="w-full px-5 pt-4 pb-2 bg-transparent border-none outline-none text-[#1A1826] placeholder:text-[#A8A6C0] resize-none text-base leading-relaxed"
@@ -2568,14 +2610,14 @@ function InputBar({
                   type="button"
                   onClick={() => setAssistantOpen(v => !v)}
                   className={`flex items-center gap-1 px-2 py-1 rounded-lg text-[11.5px] font-semibold transition-all border ${
-                    selectedAssistant
+                    displayedAssistantName
                       ? 'bg-[#EEEEFF] border-[#C7C3F7] text-[#4F46E5]'
                       : assistantOpen
                         ? 'bg-[#F4F3FC] border-[#C7C3F7] text-[#4F46E5]'
                         : 'bg-transparent border-transparent text-[#A8A6C0] hover:text-[#4F46E5] hover:bg-[#F4F3FC]'
                   }`}>
                   <Users className="w-3.5 h-3.5 shrink-0" strokeWidth={1.8} />
-                  <span>{selectedAssistant ?? '비서 선택'}</span>
+                  <span>{displayedAssistantName ? '비서 다시 선택' : '비서 선택'}</span>
                   <ChevronDown className="w-3 h-3 shrink-0 transition-transform" style={{ transform: assistantOpen ? 'rotate(180deg)' : 'none' }} />
                 </button>
 
@@ -2583,14 +2625,18 @@ function InputBar({
                   <div className="absolute bottom-full left-0 mb-2 w-48 bg-white rounded-xl border border-[#E4E2F0] shadow-lg overflow-hidden z-30">
                     {[...(assistantOrder && assistantOrder.length > 0 ? assistantOrder : MY_ASSISTANTS)].reverse().map(a => (
                       <button key={a} type="button"
-                        onClick={() => { setSelectedAssistant(selectedAssistant === a ? null : a); setAssistantOpen(false); }}
+                        onClick={() => {
+                          setSelectedAssistant(a);
+                          setAssistantOpen(false);
+                          setTimeout(() => textareaRef.current?.focus(), 0);
+                        }}
                         className={`w-full flex items-center gap-2 px-3 py-2.5 text-left text-[12.5px] font-medium transition-colors ${
-                          selectedAssistant === a
+                          displayedAssistantName === a
                             ? 'bg-[#EEEEFF] text-[#4F46E5]'
                             : 'text-[#1A1826] hover:bg-[#F9F8FF]'
                         }`}>
-                        {selectedAssistant === a && <CheckCircle2 className="w-3.5 h-3.5 text-[#4F46E5] shrink-0" strokeWidth={2} />}
-                        {selectedAssistant !== a && <div className="w-3.5 h-3.5 shrink-0" />}
+                        {displayedAssistantName === a && <CheckCircle2 className="w-3.5 h-3.5 text-[#4F46E5] shrink-0" strokeWidth={2} />}
+                        {displayedAssistantName !== a && <div className="w-3.5 h-3.5 shrink-0" />}
                         {a}
                       </button>
                     ))}
@@ -2618,9 +2664,9 @@ function InputBar({
    비서 진입 패널
 ══════════════════════════════════════════════════════════════ */
 function AssistantIntroPanel({
-  name, starters, desc, onStarterClick,
+  name, starters, desc, switchNotice, onStarterClick,
 }: {
-  name: string; starters: string[]; desc?: string;
+  name: string; starters: string[]; desc?: string; switchNotice?: string;
   onStarterClick: (text: string) => void;
 }) {
   return (
@@ -2629,6 +2675,13 @@ function AssistantIntroPanel({
         <img src={jpdcLogo} alt="JPDC AI" className="w-full h-full object-cover" />
       </div>
       <div className="flex-1 min-w-0 space-y-3">
+        {switchNotice && (
+          <div className="flex items-center gap-2 rounded-xl border border-[#D9D6F5] bg-[#F7F6FF] px-3.5 py-2.5 text-[12px] font-medium text-[#6B6882]">
+            <CheckCircle2 className="h-4 w-4 shrink-0 text-[#4F46E5]" strokeWidth={2} />
+            <span>{switchNotice}</span>
+          </div>
+        )}
+
         {/* 배지 */}
         <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-[#EEEEFF] border border-[#C7C3F7] text-[10.5px] font-semibold text-[#4F46E5]">
           <Users className="w-3 h-3" strokeWidth={2} />
@@ -2638,7 +2691,7 @@ function AssistantIntroPanel({
         {/* 인사말 */}
         <div className="bg-[#F9F8FF] border border-[#E4E2F0] rounded-2xl rounded-tl-sm px-5 py-4">
           <p className="text-[16px] font-bold text-[#1A1826] mb-1">
-            <span className="text-[#4F46E5]">{name}</span>과 대화를 시작할까요?
+            <span className="text-[#4F46E5]">{name}</span>과 새 대화를 시작합니다.
           </p>
           {desc && (
             <p className="text-[12.5px] text-[#6B6882] leading-relaxed break-keep">{desc}</p>
@@ -2985,6 +3038,53 @@ export default function ConversationView({
   const handleSend = (text: string, assistantName?: string | null) => {
     setAwaitingFollowUp(false);
     const effective = assistantName ?? activeAssistantName;
+    const startsNewAssistantConversation = Boolean(
+      assistantName && assistantName !== activeAssistantName
+    );
+
+    if (startsNewAssistantConversation && assistantName) {
+      let archived = false;
+      if (messages.length > 0) {
+        try {
+          const storageKey = 'jpdc-ai-conversation-archive';
+          const stored = JSON.parse(localStorage.getItem(storageKey) ?? '[]');
+          const archive = Array.isArray(stored) ? stored : [];
+          archive.unshift({
+            id: `${Date.now()}-${activeAssistantName ?? 'general'}`,
+            assistantName: activeAssistantName,
+            savedAt: new Date().toISOString(),
+            messages,
+          });
+          localStorage.setItem(storageKey, JSON.stringify(archive.slice(0, 50)));
+          archived = true;
+        } catch {
+          archived = false;
+        }
+      }
+
+      setActiveAssistantName(assistantName);
+      setAnswerDoneSet(new Set());
+      setMessages([
+        {
+          role: 'assistant',
+          kind: 'assistant-intro',
+          name: assistantName,
+          starters: MY_ASSISTANT_STARTERS[assistantName] ?? [],
+          desc: MY_ASSISTANT_DESCRIPTIONS[assistantName],
+          switchNotice: archived
+            ? `기존 대화를 저장했습니다. ${assistantName}과 새 대화를 시작합니다.`
+            : `${assistantName}과 새 대화를 시작합니다.`,
+        },
+        { role: 'user', text },
+        {
+          role: 'assistant',
+          kind: 'classifying',
+          forceKind: assistantName === '회의록 문장정리' ? 'minutes-request' : 'instruction',
+        },
+      ]);
+      return;
+    }
+
     if (assistantName) setActiveAssistantName(assistantName);
 
     setMessages(prev => {
@@ -3189,6 +3289,7 @@ export default function ConversationView({
                   name={msg.name}
                   starters={msg.starters}
                   desc={msg.desc}
+                  switchNotice={msg.switchNotice}
                   onStarterClick={text => handleSend(text, msg.name)}
                 />
               );
@@ -3420,6 +3521,8 @@ export default function ConversationView({
         onSend={handleSend}
         focusRequest={followUpFocusRequest}
         awaitingFollowUp={awaitingFollowUp}
+        activeAssistantName={activeAssistantName}
+        assistantOrder={assistantOrder}
       />
     </div>
   );
