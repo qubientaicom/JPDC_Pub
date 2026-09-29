@@ -8,3 +8,9 @@ When shell `git push` over HTTPS fails because credentials are not injected, use
 **Why:** The Replit GitHub connection can authenticate API requests while the shell Git client may still have no usable HTTPS credential helper. The proxy also enforces a request-rate limit that can interrupt parallel blob uploads.
 
 **How to apply:** Verify the repository and target branch first, use the remote branch tip as the commit parent, mirror the local tracked tree, and verify the updated ref after the API operation. When building a complete tree, read `git ls-tree` with both `core.quotePath=false` and `-z`; otherwise quoted non-ASCII paths can become literal backslash filenames in the GitHub tree. After an API-created squash commit, confirm its tree matches the local tree before aligning the local branch to the new remote ref.
+
+For Git metadata passed through CodeExecution's `shellExec`, do not parse raw `-z` output: its control characters can be stripped, collapsing status/path records. Encode diff and tree records as JSON in a temporary file using Python, then read that JSON with `readFile`.
+
+**Why:** Parsing the collapsed output as NUL-delimited records loses file boundaries and can produce an invalid Git tree.
+
+**How to apply:** Keep `-z` inside the shell subprocess, decode the bytes into structured JSON there, and only pass JSON across the tool boundary.
