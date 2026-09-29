@@ -10,6 +10,7 @@ import ManualModal from './components/ManualModal';
 import OnboardingModal from './components/OnboardingModal';
 import SavedPanel, { type SavedItem } from './components/SavedPanel';
 import NotifPanel, { INITIAL_UNREAD } from './components/NotifPanel';
+import type { MessageAttachment } from './types/conversation';
 
 function App() {
   const [activeView, setActiveView] = useState<'home' | 'market' | 'briefing' | 'conversation'>('home');
@@ -20,6 +21,7 @@ function App() {
   const [manualOpen, setManualOpen] = useState(false);
   const [onboardingOpen, setOnboardingOpen] = useState(false);
   const [query, setQuery] = useState('');
+  const [initialAttachments, setInitialAttachments] = useState<MessageAttachment[]>([]);
   const [conversationKey, setConversationKey] = useState(0);
   const [assistantContext, setAssistantContext] = useState<{ name: string; starters: string[]; desc?: string } | null>(null);
   const [favorites, setFavorites] = useState<string[]>([]);
@@ -34,15 +36,17 @@ function App() {
   const toggleFavorite = (name: string) =>
     setFavorites(prev => prev.includes(name) ? prev.filter(n => n !== name) : [...prev, name]);
 
-  const handleSubmit = (text: string) => {
+  const handleSubmit = (text: string, attachments: MessageAttachment[] = []) => {
     setQuery(text);
+    setInitialAttachments(attachments);
     setAssistantContext(null);
     setActiveView('conversation');
     setConversationKey(k => k + 1);
   };
 
-  const handleStartWithAssistant = (ctx: { name: string; starters: string[]; desc?: string }, initialQuery?: string) => {
+  const handleStartWithAssistant = (ctx: { name: string; starters: string[]; desc?: string }, initialQuery?: string, attachments: MessageAttachment[] = []) => {
     setQuery(initialQuery ?? '');
+    setInitialAttachments(attachments);
     setAssistantContext(ctx);
     setActiveView('conversation');
     setConversationKey(k => k + 1);
@@ -51,11 +55,16 @@ function App() {
   const handleSaveItem = (q: string, answer: string) => {
     setSavedItems((prev) => [...prev, { query: q, answer, savedAt: new Date() }]);
     setSavedPanelOpen(true);
+    if (window.innerWidth < 768) setSidebarOpen(true);
     setNotifPanelOpen(false);
   };
 
+  const removeSavedItem = (index: number) =>
+    setSavedItems(prev => prev.filter((_, itemIndex) => itemIndex !== index));
+
   const toggleSavedPanel = () => {
     setSavedPanelOpen((v) => !v);
+    if (window.innerWidth < 768) setSidebarOpen(true);
     setNotifPanelOpen(false);
   };
   const toggleNotifPanel = () => {
@@ -78,6 +87,8 @@ function App() {
           savedPanelOpen={savedPanelOpen}
           onToggleSavedPanel={toggleSavedPanel}
           savedItemCount={savedItems.length}
+          savedItems={savedItems}
+          onRemoveSavedItem={removeSavedItem}
         />
 
         {/* 저장 패널 — 사이드바 바로 오른쪽 */}
@@ -85,7 +96,7 @@ function App() {
           items={savedItems}
           open={savedPanelOpen}
           onClose={() => setSavedPanelOpen(false)}
-          onRemove={(index) => setSavedItems(prev => prev.filter((_, itemIndex) => itemIndex !== index))}
+          onRemove={removeSavedItem}
         />
 
         {/* 메인 콘텐츠 */}
@@ -144,6 +155,7 @@ function App() {
               <ConversationView
                 key={conversationKey}
                 initialQuery={query}
+                initialAttachments={initialAttachments}
                 assistantContext={assistantContext}
                 onOpenBriefing={() => setActiveView('briefing')}
                 savedItems={savedItems}

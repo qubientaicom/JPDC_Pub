@@ -3,6 +3,42 @@ import Tooltip from './Tooltip';
 
 export interface SavedItem { query: string; answer: string; savedAt: Date }
 
+export function SavedItemsList({ items, onRemove }: {
+  items: SavedItem[];
+  onRemove: (index: number) => void;
+}) {
+  return items.length === 0 ? (
+    <div className="flex min-h-40 flex-col items-center justify-center gap-2 text-[#A8A6C0]">
+      <Bookmark className="w-8 h-8" strokeWidth={1.3} />
+      <p className="text-sm text-center">저장한 답변이 없습니다</p>
+    </div>
+  ) : (
+    <div className="space-y-2">
+      {[...items].map((item, originalIndex) => ({ item, originalIndex })).reverse().map(({ item, originalIndex }) => (
+        <div key={originalIndex} className="group/saved bg-white border border-[#E4E2F0] rounded-xl p-3 hover:border-[#C7C3F7] transition-colors">
+          <div className="flex items-start gap-2">
+            <p className="flex-1 min-w-0 text-[11.5px] font-semibold text-[#4F46E5] line-clamp-2 leading-snug">
+              {item.query}
+            </p>
+            <button type="button"
+              onClick={() => onRemove(originalIndex)}
+              aria-label="저장 항목 삭제"
+              className="shrink-0 mt-[-2px] mr-[-4px] p-1 rounded-md text-[#C7C3F7] hover:text-[#EF4444] hover:bg-[#FFF0F0] opacity-100 md:opacity-0 md:group-hover/saved:opacity-100 transition-all duration-150">
+              <X className="w-3 h-3" strokeWidth={2} />
+            </button>
+          </div>
+          <p className="text-[12px] text-[#6B6882] leading-relaxed line-clamp-3 mt-2">
+            {item.answer.replace(/\*\*([^*]+)\*\*/g, '$1')}
+          </p>
+          <p className="text-[11px] text-[#A8A6C0] mt-2">
+            {item.savedAt.toLocaleTimeString('ko-KR', { hour: '2-digit', minute: '2-digit' })}
+          </p>
+        </div>
+      ))}
+    </div>
+  );
+}
+
 export default function SavedPanel({ items, open, onClose, onRemove }: {
   items: SavedItem[];
   open: boolean;
@@ -12,7 +48,7 @@ export default function SavedPanel({ items, open, onClose, onRemove }: {
   return (
     <div
       className={`
-        relative h-full flex flex-col shrink-0
+        relative h-full hidden md:flex flex-col shrink-0
         bg-[#F9F8FF] border-r border-[#E4E2F0]
         transition-[width,opacity] duration-300 ease-in-out overflow-hidden
         ${open ? 'w-[280px] opacity-100' : 'w-0 opacity-0'}
@@ -39,35 +75,7 @@ export default function SavedPanel({ items, open, onClose, onRemove }: {
 
       {/* 목록 */}
       <div className="flex-1 overflow-y-auto px-3 py-3 space-y-2 min-w-[280px]" style={{ scrollbarWidth: 'none' }}>
-        {items.length === 0 ? (
-          <div className="flex flex-col items-center justify-center h-full gap-2 text-[#A8A6C0]">
-            <Bookmark className="w-8 h-8" strokeWidth={1.3} />
-            <p className="text-sm text-center">저장한 답변이 없습니다</p>
-          </div>
-        ) : (
-          [...items].map((item, originalIndex) => ({ item, originalIndex })).reverse().map(({ item, originalIndex }) => (
-            <div key={originalIndex} className="group/saved bg-white border border-[#E4E2F0] rounded-xl p-3 hover:border-[#C7C3F7] transition-colors">
-              <div className="flex items-start gap-2">
-                <p className="flex-1 min-w-0 text-[11.5px] font-semibold text-[#4F46E5] line-clamp-2 leading-snug">
-                  {item.query}
-                </p>
-                <button type="button"
-                  onClick={() => onRemove(originalIndex)}
-                  aria-label="저장 항목 삭제"
-                  className="shrink-0 mt-[-2px] mr-[-4px] p-1 rounded-md text-[#C7C3F7] hover:text-[#EF4444] hover:bg-[#FFF0F0]
-                             opacity-0 group-hover/saved:opacity-100 transition-all duration-150">
-                  <X className="w-3 h-3" strokeWidth={2} />
-                </button>
-              </div>
-              <p className="text-[12px] text-[#6B6882] leading-relaxed line-clamp-3 mt-2">
-                {item.answer.replace(/\*\*([^*]+)\*\*/g, '$1')}
-              </p>
-              <p className="text-[11px] text-[#A8A6C0] mt-2">
-                {item.savedAt.toLocaleTimeString('ko-KR', { hour: '2-digit', minute: '2-digit' })}
-              </p>
-            </div>
-          ))
-        )}
+        <SavedItemsList items={items} onRemove={onRemove} />
       </div>
     </div>
   );

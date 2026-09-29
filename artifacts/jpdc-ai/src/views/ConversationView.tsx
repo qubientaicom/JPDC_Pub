@@ -1,3 +1,4 @@
+import { MAX_ATTACHMENTS, type MessageAttachment } from '../types/conversation';
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import type { SavedItem } from '../components/SavedPanel';
 import Tooltip from '../components/Tooltip';
@@ -5,7 +6,7 @@ import { useTheme } from '../context/ThemeContext';
 import jpdcLogo from '../assets/jpdc-logo.png';
 import {
   Sparkles, Share, MoreHorizontal, Paperclip, Mic, Menu, Store,
-  ChevronDown, ChevronLeft, ChevronRight, ArrowUp, FileText, RotateCcw, ThumbsUp, ThumbsDown,
+  ChevronDown, ChevronLeft, ChevronRight, ArrowUp, Square, FileText, RotateCcw, ThumbsUp, ThumbsDown,
   Copy, Bookmark, FileDown, MessageSquare, X, BookmarkCheck, Bell,
   PenTool, Code, Globe, BookOpen, BarChart2, Mic2, Users, ClipboardList, CheckCircle2,
   TrendingUp, ArrowRight, Pencil, RefreshCw, Check, Database, Layers, type LucideIcon,
@@ -441,35 +442,45 @@ function renderText(text: string) {
 }
 
 /* ── 스트리밍 AI 답변 ─────────────────────────────────────── */
+const StreamingStoppedContext = React.createContext(false);
+
 function StreamingAnswer({ answer, onDone }: { answer: string; onDone: () => void }) {
   const [displayed, setDisplayed] = useState('');
   const [done, setDone] = useState(false);
   const idx = useRef(0);
+  const stopped = React.useContext(StreamingStoppedContext);
+  const onDoneRef = useRef(onDone);
+  onDoneRef.current = onDone;
 
   useEffect(() => {
+    if (stopped) return;
+    let interval: ReturnType<typeof setInterval> | undefined;
     const startTimer = setTimeout(() => {
-      const interval = setInterval(() => {
+      interval = setInterval(() => {
         if (idx.current >= answer.length) {
           clearInterval(interval);
           setDone(true);
-          onDone();
+          onDoneRef.current();
           return;
         }
         const chunk = Math.floor(Math.random() * 3) + 1;
         idx.current = Math.min(idx.current + chunk, answer.length);
         setDisplayed(answer.slice(0, idx.current));
       }, 18);
-      return () => clearInterval(interval);
     }, 600);
-    return () => clearTimeout(startTimer);
-  }, [answer, onDone]);
+    return () => {
+      clearTimeout(startTimer);
+      if (interval) clearInterval(interval);
+    };
+  }, [answer, stopped]);
 
   return (
     <div className="text-[13.5px] text-[#1A1826] space-y-0.5">
       {renderText(displayed)}
-      {!done && (
+      {!done && !stopped && (
         <span className="inline-block w-0.5 h-4 bg-[#4F46E5] animate-pulse ml-0.5 align-middle" />
       )}
+      {stopped && <p className="mt-2 text-[11px] text-[#8A87A3]">답변이 중지되었습니다.</p>}
     </div>
   );
 }
@@ -1145,8 +1156,8 @@ function AmbiguousPanel({
           <span className="text-[12px] text-[#A8A6C0]">관련 지침과 비서를 함께 확인하세요</span>
         </div>
 
-        {/* ── 분할 레이아웃: 모바일 상하, sm 이상 좌우 ── */}
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 items-start">
+        {/* 답변 완료 후에는 참고 문서 → 액션 버튼 → 추천 비서 순서로 배치 */}
+        <div className={`grid grid-cols-1 ${streaming && !textDone ? 'sm:grid-cols-2' : ''} gap-3 items-start`}>
 
           {/* ─── 왼쪽: RAG 지침 찾기 ─── */}
           <div className="flex flex-col gap-2 min-w-0">
@@ -1185,7 +1196,9 @@ function AmbiguousPanel({
             )}
           </div>
 
-          {/* ─── 아래(모바일) / 오른쪽(데스크탑): 비서 찾기 — 모바일은 RAG 완료 후 표시 ─── */}
+          {actionBar}
+
+          {/* ─── 비서 찾기 — 모바일은 RAG 완료 후 표시 ─── */}
           <div className={`flex flex-col gap-2 min-w-0 transition-opacity duration-300 ${(!streaming || textDone) ? 'opacity-100' : 'hidden sm:flex sm:opacity-100'}`}>
             {/* 패널 헤더 */}
             <div className="flex items-center gap-1.5 px-3 py-2 rounded-xl bg-amber-50 border border-amber-200">
@@ -1223,7 +1236,6 @@ function AmbiguousPanel({
             <p className="text-[10.5px] text-[#A8A6C0] text-center">비서를 선택하면 바로 대화를 시작합니다</p>
           </div>
         </div>
-        {actionBar}
       </div>
     </div>
   );
@@ -1284,6 +1296,7 @@ function RagAbPanel({
   streamingB,
   selected,
   onSelect,
+  onDone,
   actionBar,
 }: {
   query: string;
@@ -1291,11 +1304,20 @@ function RagAbPanel({
   streamingB: boolean;
   selected?: 'A' | 'B';
   onSelect: (choice: 'A' | 'B') => void;
+  onDone: () => void;
   actionBar?: React.ReactNode;
 }) {
   const data = getRagAbData(query);
   const [doneA, setDoneA] = useState(false);
   const [doneB, setDoneB] = useState(false);
+  const reportedDone = useRef(false);
+
+  useEffect(() => {
+    if (doneA && doneB && !reportedDone.current) {
+      reportedDone.current = true;
+      onDone();
+    }
+  }, [doneA, doneB, onDone]);
 
   const sourceList = (srcs: { title: string; type: string }[]) => (
     <div className="border border-[#E4E2F0] rounded-xl overflow-hidden">
@@ -1534,6 +1556,7 @@ function RagTagAssistantPanel({
           </section>
         </div>
 
+        {allDone && actionBar}
         {allDone && (
           <AssistantSelectPanel
             query={query}
@@ -1542,7 +1565,6 @@ function RagTagAssistantPanel({
             compact
           />
         )}
-        {allDone && actionBar}
       </div>
     </div>
   );
@@ -2312,7 +2334,7 @@ function RerunResultBlock({ state, onToggle }: { state: RerunState; onToggle: ()
    메시지 타입
 ══════════════════════════════════════════════════════════════ */
 type Message =
-  | { role: 'user'; text: string }
+  | { role: 'user'; text: string; attachments?: MessageAttachment[] }
   | { role: 'assistant'; kind: 'classifying'; forceKind?: 'instruction' | 'minutes-request' | 'minutes-result' }
   | { role: 'assistant'; kind: 'thinking'; queryKind: QueryKind; query: string }
   | { role: 'assistant'; kind: 'instruction'; streaming: boolean; appendSelectOnDone?: boolean }
@@ -2381,12 +2403,16 @@ interface FileEntry {
 
 function InputBar({
   onSend,
+  onStop,
+  isAnswering = false,
   focusRequest = 0,
   awaitingFollowUp = false,
   activeAssistantName = null,
   assistantOrder = [],
 }: {
-  onSend: (text: string, assistantName?: string | null) => void;
+  onSend: (text: string, assistantName?: string | null, attachments?: MessageAttachment[]) => void;
+  onStop: () => void;
+  isAnswering?: boolean;
   focusRequest?: number;
   awaitingFollowUp?: boolean;
   activeAssistantName?: string | null;
@@ -2396,6 +2422,7 @@ function InputBar({
   const [assistantOpen, setAssistantOpen] = useState(false);
   const [selectedAssistant, setSelectedAssistant] = useState<string | null>(null);
   const [attachedFiles, setAttachedFiles] = useState<FileEntry[]>([]);
+  const [attachmentNotice, setAttachmentNotice] = useState('');
   const fileInputRef = useRef<HTMLInputElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const nextId = useRef(0);
@@ -2442,11 +2469,17 @@ function InputBar({
   }, [attachedFiles.map(f => f.id).join(',')]);
 
   const doSend = () => {
+    if (isAnswering) return;
     if (!value.trim() && attachedFiles.length === 0) return;
-    onSend(value.trim(), selectedAssistant);
+    onSend(value.trim(), selectedAssistant, attachedFiles.map(({ file }) => ({
+      name: file.name,
+      size: file.size,
+      type: file.type,
+    })));
     setValue('');
     setSelectedAssistant(null);
     setAttachedFiles([]);
+    setAttachmentNotice('');
     if (fileInputRef.current) fileInputRef.current.value = '';
   };
   const dropdownRef = useRef<HTMLDivElement>(null);
@@ -2469,18 +2502,20 @@ function InputBar({
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const incoming = Array.from(e.target.files ?? []);
     if (!incoming.length) return;
-    setAttachedFiles(prev => {
-      const names = new Set(prev.map(f => f.file.name));
-      const fresh: FileEntry[] = incoming
-        .filter(f => !names.has(f.name))
-        .map(f => ({ id: nextId.current++, file: f, status: 'indexing', progress: 0 }));
-      return [...prev, ...fresh];
-    });
+    const names = new Set(attachedFiles.map(f => `${f.file.name}:${f.file.size}`));
+    const unique = incoming.filter(f => !names.has(`${f.name}:${f.size}`));
+    const fresh: FileEntry[] = unique
+      .slice(0, MAX_ATTACHMENTS - attachedFiles.length)
+      .map(file => ({ id: nextId.current++, file, status: 'indexing', progress: 0 }));
+    setAttachmentNotice(unique.length > fresh.length ? `첨부파일은 최대 ${MAX_ATTACHMENTS}개까지 추가할 수 있습니다.` : '');
+    setAttachedFiles(prev => [...prev, ...fresh]);
     e.target.value = '';
   };
 
-  const removeFile = (id: number) =>
+  const removeFile = (id: number) => {
     setAttachedFiles(prev => prev.filter(f => f.id !== id));
+    setAttachmentNotice('');
+  };
 
   return (
     <div className="shrink-0 px-6 py-4 border-t border-[#E4E2F0] bg-white">
@@ -2502,13 +2537,27 @@ function InputBar({
                   <span className="shrink-0 text-[10px] font-medium text-[#8A84C7]">비서</span>
                 </div>
               )}
+              {attachedFiles.length > 0 && (
+                <div className="flex w-full min-w-0 flex-col gap-1 sm:hidden">
+                  {attachedFiles.map(entry => (
+                    <div key={entry.id} className="flex min-w-0 items-center gap-2 rounded-lg bg-[#F4F3FC] px-2.5 py-1.5">
+                      <span className="min-w-0 flex-1 truncate text-[12px] text-[#6B6882]" title={entry.file.name}>{entry.file.name}</span>
+                      <button type="button" onClick={() => removeFile(entry.id)}
+                        className="flex h-5 w-5 shrink-0 items-center justify-center rounded text-[#8A87A3] hover:text-[#4F46E5]"
+                        aria-label={`${entry.file.name} 첨부 제거`}>
+                        <X className="h-3.5 w-3.5" strokeWidth={2} />
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              )}
               {attachedFiles.map(entry => {
                 const { bg, text } = fileAccentColor(entry.file.name);
                 const ext = entry.file.name.split('.').pop()?.toUpperCase() ?? 'FILE';
                 const isDone = entry.status === 'done';
                 return (
                   <div key={entry.id}
-                    className="relative flex flex-col gap-1 pl-2.5 pr-1.5 pt-1.5 pb-1 rounded-lg border overflow-hidden transition-all group/chip"
+                    className="relative hidden flex-col gap-1 pl-2.5 pr-1.5 pt-1.5 pb-1 rounded-lg border overflow-hidden transition-all group/chip sm:flex"
                     style={{ borderColor: isDone ? `${text}33` : `${text}55`, background: bg, minWidth: 140, maxWidth: 200 }}>
                     {/* 상단 행: 배지 + 아이콘 상태 + 삭제 */}
                     <div className="flex items-center gap-2">
@@ -2560,6 +2609,9 @@ function InputBar({
                 );
               })}
             </div>
+          )}
+          {attachmentNotice && (
+            <p className="px-4 pt-1 text-[11px] font-medium text-[#B45309]" role="status">{attachmentNotice}</p>
           )}
 
           {isPendingAssistantChange && (
@@ -2644,12 +2696,20 @@ function InputBar({
                 )}
               </div>
             </div>
-            <Tooltip label="메시지 전송 (Enter)">
-              <button type="button" onClick={doSend}
-                className="w-8 h-8 rounded-xl bg-[#4F46E5] hover:bg-[#4338CA] flex items-center justify-center text-white transition-colors shadow-sm shadow-[#4F46E5]/25">
-                <ArrowUp className="w-4 h-4" strokeWidth={2} />
+            {isAnswering ? (
+              <button type="button" onClick={onStop} aria-label="답변중지"
+                className="h-8 shrink-0 rounded-lg bg-[#4F46E5] px-2.5 text-white flex items-center justify-center gap-1.5 text-[11px] font-semibold hover:bg-[#4338CA] transition-colors shadow-sm shadow-[#4F46E5]/25">
+                <Square className="w-3 h-3" strokeWidth={2} fill="currentColor" />
+                답변중지
               </button>
-            </Tooltip>
+            ) : (
+              <Tooltip label="메시지 전송 (Enter)">
+                <button type="button" onClick={doSend}
+                  className="w-8 h-8 rounded-xl bg-[#4F46E5] hover:bg-[#4338CA] flex items-center justify-center text-white transition-colors shadow-sm shadow-[#4F46E5]/25">
+                  <ArrowUp className="w-4 h-4" strokeWidth={2} />
+                </button>
+              </Tooltip>
+            )}
           </div>
         </div>
         <p className="text-center text-[10.5px] text-[#A8A6C0] mt-2">
@@ -2837,14 +2897,14 @@ function MinutesResultPanel({ streaming, onDone, actionBar }: { streaming: boole
 ══════════════════════════════════════════════════════════════ */
 type AssistantCtx = { name: string; starters: string[]; desc?: string };
 
-function makeInitialMessages(query: string, ctx: AssistantCtx | null): Message[] {
+function makeInitialMessages(query: string, ctx: AssistantCtx | null, attachments: MessageAttachment[]): Message[] {
   // 비서 컨텍스트 + 질의가 함께 있으면 → 인트로 표시 후 즉시 처리 시작
-  if (ctx && query.trim()) {
+  if (ctx && (query.trim() || attachments.length > 0)) {
     const forceKind: 'instruction' | 'minutes-request' =
       ctx.name === '회의록 문장정리' ? 'minutes-request' : 'instruction';
     return [
       { role: 'assistant', kind: 'assistant-intro', name: ctx.name, starters: ctx.starters, desc: ctx.desc },
-      { role: 'user', text: query },
+      { role: 'user', text: query, attachments },
       { role: 'assistant', kind: 'classifying', forceKind },
     ];
   }
@@ -2854,13 +2914,14 @@ function makeInitialMessages(query: string, ctx: AssistantCtx | null): Message[]
   }
   // 일반 질의
   return [
-    { role: 'user', text: query },
+    { role: 'user', text: query, attachments },
     { role: 'assistant', kind: 'classifying' },
   ];
 }
 
 export default function ConversationView({
   initialQuery,
+  initialAttachments = [],
   assistantContext = null,
   onOpenBriefing,
   savedItems,
@@ -2876,6 +2937,7 @@ export default function ConversationView({
   onNavigate,
 }: {
   initialQuery: string;
+  initialAttachments?: MessageAttachment[];
   assistantContext?: AssistantCtx | null;
   onOpenBriefing?: () => void;
   savedItems: SavedItem[];
@@ -2892,8 +2954,9 @@ export default function ConversationView({
 }) {
   const { theme } = useTheme();
   const isDark = theme === 'dark';
-  const [messages, setMessages] = useState<Message[]>(() => makeInitialMessages(initialQuery, assistantContext));
+  const [messages, setMessages] = useState<Message[]>(() => makeInitialMessages(initialQuery, assistantContext, initialAttachments));
   const [answerDoneSet, setAnswerDoneSet] = useState<Set<number>>(new Set());
+  const [stoppedSet, setStoppedSet] = useState<Set<number>>(new Set());
   const [activeAssistantName, setActiveAssistantName] = useState<string | null>(assistantContext?.name ?? null);
   const [followUpFocusRequest, setFollowUpFocusRequest] = useState(0);
   const [awaitingFollowUp, setAwaitingFollowUp] = useState(false);
@@ -3035,7 +3098,7 @@ export default function ConversationView({
     });
   }, []);
 
-  const handleSend = (text: string, assistantName?: string | null) => {
+  const handleSend = (text: string, assistantName?: string | null, attachments: MessageAttachment[] = []) => {
     setAwaitingFollowUp(false);
     const effective = assistantName ?? activeAssistantName;
     const startsNewAssistantConversation = Boolean(
@@ -3064,6 +3127,7 @@ export default function ConversationView({
 
       setActiveAssistantName(assistantName);
       setAnswerDoneSet(new Set());
+      setStoppedSet(new Set());
       setMessages([
         {
           role: 'assistant',
@@ -3075,7 +3139,7 @@ export default function ConversationView({
             ? `기존 대화를 저장했습니다. ${assistantName}과 새 대화를 시작합니다.`
             : `${assistantName}과 새 대화를 시작합니다.`,
         },
-        { role: 'user', text },
+        { role: 'user', text, attachments },
         {
           role: 'assistant',
           kind: 'classifying',
@@ -3088,18 +3152,20 @@ export default function ConversationView({
     if (assistantName) setActiveAssistantName(assistantName);
 
     setMessages(prev => {
-      const finished = prev.map(m =>
-        m.role === 'assistant' ? { ...m, streaming: false } : m
+      const finished = prev.map((m, index) =>
+        m.role === 'assistant' && !stoppedSet.has(index) ? { ...m, streaming: false } : m
       ) as Message[];
 
-      // 비서 인트로가 없을 때 → 인트로만 표시 (질의 버림)
+      // 비서 인트로가 없을 때에도 전송한 첫 질문과 첨부파일을 유지
       const alreadyHasIntro = effective
         ? finished.some(m => m.role === 'assistant' && m.kind === 'assistant-intro' && (m as { name: string }).name === effective)
         : false;
       if (effective && !alreadyHasIntro) {
         return [
           ...finished,
-          { role: 'assistant', kind: 'assistant-intro', name: effective, starters: MY_ASSISTANT_STARTERS[effective] ?? [], desc: undefined },
+          { role: 'assistant', kind: 'assistant-intro', name: effective, starters: MY_ASSISTANT_STARTERS[effective] ?? [], desc: MY_ASSISTANT_DESCRIPTIONS[effective] },
+          { role: 'user', text, attachments },
+          { role: 'assistant', kind: 'classifying', forceKind: effective === '회의록 문장정리' ? 'minutes-request' : 'instruction' },
         ];
       }
 
@@ -3115,7 +3181,7 @@ export default function ConversationView({
 
       return [
         ...finished,
-        { role: 'user' as const, text },
+        { role: 'user' as const, text, attachments },
         { role: 'assistant' as const, kind: 'classifying' as const, forceKind },
       ];
     });
@@ -3124,6 +3190,19 @@ export default function ConversationView({
   const markDone = useCallback((idx: number) => {
     setAnswerDoneSet(prev => new Set([...prev, idx]));
   }, []);
+
+  const activeStreamingIndex = messages.reduce((active, msg, index) => {
+    if (msg.role !== 'assistant' || stoppedSet.has(index) || answerDoneSet.has(index)) return active;
+    if ('streaming' in msg && msg.streaming) return index;
+    if (msg.kind === 'rag-ab' && (msg.streamingA || msg.streamingB)) return index;
+    if (msg.kind === 'rag-tag-assistant' && (msg.streamingRag || msg.streamingTag)) return index;
+    return active;
+  }, -1);
+
+  const handleStop = () => {
+    if (activeStreamingIndex < 0) return;
+    setStoppedSet(prev => new Set([...prev, activeStreamingIndex]));
+  };
 
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: 'smooth' });
@@ -3167,13 +3246,37 @@ export default function ConversationView({
       <div className="flex-1 overflow-y-auto px-6 py-6" style={{ scrollbarWidth: 'none' }}>
         <div className="max-w-[920px] mx-auto space-y-6">
           {messages.map((msg, i) => {
+            const renderMessage = () => {
             /* ── 사용자 메시지 ── */
             if (msg.role === 'user') {
               return (
-                <div key={i} className="flex justify-end">
-                  <div className="max-w-[72%] bg-[#4F46E5] text-white rounded-2xl rounded-tr-sm px-5 py-3.5 text-[13.5px] leading-relaxed shadow-sm shadow-[#4F46E5]/20">
-                    {msg.text}
-                  </div>
+                <div key={i} className="flex flex-col items-end gap-2">
+                  {msg.attachments && msg.attachments.length > 0 && (
+                    <div className="flex max-w-full flex-wrap justify-end gap-2" aria-label={`첨부파일 ${msg.attachments.length}개`}>
+                      {msg.attachments.slice(0, MAX_ATTACHMENTS).map((file, index) => {
+                        const ext = file.name.split('.').pop()?.toUpperCase() ?? 'FILE';
+                        const accent = fileAccentColor(file.name);
+                        return (
+                          <div key={`${file.name}-${index}`} title={file.name}
+                            className="flex h-28 w-[120px] min-w-0 flex-col justify-between rounded-xl border border-[#E4E2F0] bg-white p-3 shadow-sm sm:w-[140px]">
+                            <div className="flex min-w-0 items-start gap-1.5">
+                              <FileText className="mt-0.5 h-4 w-4 shrink-0" style={{ color: accent.text }} strokeWidth={1.8} />
+                              <span className="line-clamp-3 break-all text-[11px] font-medium leading-snug text-[#1A1826]">{file.name}</span>
+                            </div>
+                            <div className="flex items-center justify-between gap-1">
+                              <span className="rounded-md px-1.5 py-0.5 text-[10px] font-semibold" style={{ background: accent.bg, color: accent.text }}>{ext}</span>
+                              <span className="text-[10px] text-[#A8A6C0]">{fmtSize(file.size)}</span>
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  )}
+                  {msg.text && (
+                    <div className="max-w-[85%] bg-[#4F46E5] text-white rounded-2xl rounded-tr-sm px-5 py-3.5 text-[13.5px] leading-relaxed shadow-sm shadow-[#4F46E5]/20 sm:max-w-[72%]">
+                      {msg.text}
+                    </div>
+                  )}
                 </div>
               );
             }
@@ -3303,6 +3406,7 @@ export default function ConversationView({
                   streamingA={msg.streamingA}
                   streamingB={msg.streamingB}
                   selected={msg.selected}
+                  onDone={() => markDone(i)}
                   onSelect={choice => setMessages(prev => {
                     const next = [...prev];
                     const cur = prev[i];
@@ -3336,14 +3440,14 @@ export default function ConversationView({
                     )}
                     {(!msg.streaming || isDone) && (
                       <div className="space-y-3">
+                        <ActionBar query={prevUserText} answer={FALLBACK_MESSAGE} sources={[]}
+                          onSave={() => onSaveItem(prevUserText, FALLBACK_MESSAGE)} />
                         <AssistantSelectPanel
                           query={prevUserText}
                           candidates={getAssistantCandidates(prevUserText)}
                           onSelect={c => handleSelectAssistant(i, c)}
                           compact
                         />
-                        <ActionBar query={prevUserText} answer={FALLBACK_MESSAGE} sources={[]}
-                          onSave={() => onSaveItem(prevUserText, FALLBACK_MESSAGE)} />
                       </div>
                     )}
                   </div>
@@ -3403,6 +3507,8 @@ export default function ConversationView({
                   onDone={() => markDone(i)}
                   actionBar={(!msg.streaming || isDone) ? (
                     <div className="space-y-3">
+                      <ActionBar query={prevUserText} answer="TAG 통계 분석 결과" sources={[]}
+                        onSave={() => onSaveItem(prevUserText, 'TAG 통계 분석 결과')} />
                       {msg.appendSelectOnDone && (
                         <AssistantSelectPanel
                           query={prevUserText}
@@ -3411,8 +3517,6 @@ export default function ConversationView({
                           compact
                         />
                       )}
-                      <ActionBar query={prevUserText} answer="TAG 통계 분석 결과" sources={[]}
-                        onSave={() => onSaveItem(prevUserText, 'TAG 통계 분석 결과')} />
                     </div>
                   ) : undefined}
                 />
@@ -3429,6 +3533,8 @@ export default function ConversationView({
                    onContinue={handleContinueQuery}
                   actionBar={(!msg.streaming || isDone) ? (
                     <div className="space-y-3">
+                      <ActionBar query={prevUserText} answer="TAG 통계 분석 결과" sources={[]}
+                        onSave={() => onSaveItem(prevUserText, 'TAG 통계 분석 결과')} />
                       {msg.appendSelectOnDone && (
                         <AssistantSelectPanel
                           query={prevUserText}
@@ -3437,8 +3543,6 @@ export default function ConversationView({
                           compact
                         />
                       )}
-                      <ActionBar query={prevUserText} answer="TAG 통계 분석 결과" sources={[]}
-                        onSave={() => onSaveItem(prevUserText, 'TAG 통계 분석 결과')} />
                     </div>
                   ) : undefined}
                 />
@@ -3493,7 +3597,10 @@ export default function ConversationView({
                           </div>
                         ))}
                       </div>
-                      {/* 폴백-비서 흐름: 지침 답변 바로 하위에 비서 선택 카드 인라인 표시 */}
+                      <ActionBar query={userQuery} answer={msgAnswer} sources={msgSources}
+                        onSave={() => onSaveItem(userQuery, msgAnswer)} />
+
+                      {/* 폴백-비서 흐름: 액션 버튼 아래에 비서 선택 카드 표시 */}
                       {msg.appendSelectOnDone && (
                         <div className="pt-2">
                           <AssistantSelectPanel
@@ -3504,13 +3611,16 @@ export default function ConversationView({
                           />
                         </div>
                       )}
-
-                      <ActionBar query={userQuery} answer={msgAnswer} sources={msgSources}
-                        onSave={() => onSaveItem(userQuery, msgAnswer)} />
                     </div>
                   )}
                 </div>
               </div>
+            );
+            };
+            return (
+              <StreamingStoppedContext.Provider key={i} value={stoppedSet.has(i)}>
+                {renderMessage()}
+              </StreamingStoppedContext.Provider>
             );
           })}
           <div ref={bottomRef} />
@@ -3519,6 +3629,8 @@ export default function ConversationView({
 
       <InputBar
         onSend={handleSend}
+        onStop={handleStop}
+        isAnswering={activeStreamingIndex >= 0}
         focusRequest={followUpFocusRequest}
         awaitingFollowUp={awaitingFollowUp}
         activeAssistantName={activeAssistantName}

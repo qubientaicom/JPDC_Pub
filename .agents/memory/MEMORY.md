@@ -1,1 +1,2 @@
 - [GitHub publishing](github-publishing.md) — use the authenticated GitHub integration API when shell HTTPS push lacks credentials; throttle blob uploads below the proxy rate limit.
+- [Managed preview port conflicts](preview-port-conflicts.md) — a failed artifact workflow may coexist with an older serving process; inspect listeners before changing app code.

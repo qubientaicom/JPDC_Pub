@@ -1108,18 +1108,20 @@ function GalleryView({ onBack, onAssistantClick, favorites = [], onToggleFavorit
   const [activeCategory, setActiveCategory] = useState<Category>('전체');
   const [viewMode, setViewMode] = useState<'grid' | 'list'>('grid');
   const [query, setQuery] = useState('');
+  const [submittedQuery, setSubmittedQuery] = useState('');
   const searchRef = useRef<HTMLInputElement>(null);
 
   const filtered = ALL_ASSISTANTS.filter((a) => {
     const matchCat = activeCategory === '전체' || a.category === activeCategory;
-    const q = query.trim().toLowerCase();
+    const q = submittedQuery.toLowerCase();
     const matchQ = !q || a.name.toLowerCase().includes(q) || a.desc.toLowerCase().includes(q) || a.category.toLowerCase().includes(q);
     return matchCat && matchQ;
   });
 
-  const isFiltering = query.trim() !== '' || activeCategory !== '전체';
+  const isFiltering = submittedQuery !== '' || activeCategory !== '전체';
 
-  const clearAll = () => { setQuery(''); setActiveCategory('전체'); searchRef.current?.focus(); };
+  const clearSearch = () => { setQuery(''); setSubmittedQuery(''); searchRef.current?.focus(); };
+  const clearAll = () => { clearSearch(); setActiveCategory('전체'); };
 
   return (
     <>
@@ -1128,7 +1130,7 @@ function GalleryView({ onBack, onAssistantClick, favorites = [], onToggleFavorit
 
         {/* 검색창 */}
         <div className="flex items-center gap-2">
-          <div className="flex-1 flex items-center gap-2 px-3 py-2.5 rounded-xl border border-[#E4E2F0] bg-[#FAFAFF]
+          <div className="flex-1 min-w-0 flex items-center gap-2 px-3 py-2.5 rounded-xl border border-[#E4E2F0] bg-[#FAFAFF]
                           hover:border-[#4F46E5]/30 focus-within:border-[#4F46E5]/50 transition-colors">
             <Search className="w-3.5 h-3.5 text-[#A8A6C0] shrink-0" strokeWidth={1.8} />
             <input
@@ -1136,16 +1138,23 @@ function GalleryView({ onBack, onAssistantClick, favorites = [], onToggleFavorit
               type="text"
               value={query}
               onChange={(e) => setQuery(e.target.value)}
+              onKeyDown={(e) => e.key === 'Enter' && setSubmittedQuery(query.trim())}
               placeholder="비서 이름, 기능, 카테고리로 검색…"
-              className="flex-1 text-[13px] text-[#1A1826] placeholder:text-[#A8A6C0] bg-transparent outline-none"
+              className="flex-1 min-w-0 text-[13px] text-[#1A1826] placeholder:text-[#A8A6C0] bg-transparent outline-none"
             />
             {query && (
-              <button type="button" onClick={() => { setQuery(''); searchRef.current?.focus(); }}
+              <button type="button" onClick={clearSearch}
                 className="p-0.5 rounded-full text-[#A8A6C0] hover:text-[#6B6882] transition-colors">
                 <XIcon className="w-3.5 h-3.5" strokeWidth={2} />
               </button>
             )}
           </div>
+          <button type="button" onClick={() => setSubmittedQuery(query.trim())}
+            className="flex items-center gap-1.5 px-4 py-2 rounded-xl bg-[#4F46E5] hover:bg-[#4338CA] text-white text-[13px] font-semibold
+                       transition-colors shadow-sm shadow-[#4F46E5]/20 whitespace-nowrap shrink-0">
+            <Search className="w-3.5 h-3.5" strokeWidth={2} />
+            검색
+          </button>
           <div className="flex items-center rounded-xl border border-[#E4E2F0] overflow-hidden shrink-0">
             <Tooltip label="그리드로 보기">
               <button type="button" onClick={() => setViewMode('grid')}

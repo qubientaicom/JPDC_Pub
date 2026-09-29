@@ -3,6 +3,7 @@ import { Plus, Search, Settings, ChevronLeft, ChevronRight, Store, Sun, Moon, Lo
 import jpdcLogo from '../assets/jpdc-logo.png';
 import { useTheme } from '../context/ThemeContext';
 import Tooltip from './Tooltip';
+import { SavedItemsList, type SavedItem } from './SavedPanel';
 
 const INITIAL_HISTORY_GROUPS = [
   {
@@ -62,6 +63,8 @@ interface SidebarProps {
   savedPanelOpen?: boolean;
   onToggleSavedPanel?: () => void;
   savedItemCount?: number;
+  savedItems: SavedItem[];
+  onRemoveSavedItem: (index: number) => void;
 }
 
 /* ── 대화 검색 모달 ── */
@@ -179,7 +182,7 @@ function ConversationSearchModal({ onClose, onSelect }: {
   );
 }
 
-export default function Sidebar({ open, onToggle, activeView, onNavigate, onOpenSettings, onOpenManual, onSelectHistory, onLogout, savedPanelOpen = false, onToggleSavedPanel, savedItemCount = 0 }: SidebarProps) {
+export default function Sidebar({ open, onToggle, activeView, onNavigate, onOpenSettings, onOpenManual, onSelectHistory, onLogout, savedPanelOpen = false, onToggleSavedPanel, savedItemCount = 0, savedItems, onRemoveSavedItem }: SidebarProps) {
   const { theme, toggle: toggleTheme } = useTheme();
   const isDark = theme === 'dark';
 
@@ -289,7 +292,21 @@ export default function Sidebar({ open, onToggle, activeView, onNavigate, onOpen
           </div>
 
           <div className="flex-1 overflow-y-auto px-2 pb-3" style={{ scrollbarWidth: 'none' }}>
-            {historyGroups.map((group) => (
+            {isMobile && savedPanelOpen ? (
+              <div className="pt-2">
+                <div className="sticky top-0 z-10 mb-2 flex items-center justify-between gap-2 border-b border-[#E4E2F0] bg-[#F9F8FF] px-2 pb-2">
+                  <span className="text-sm font-semibold text-[#1A1826]">저장 목록</span>
+                  <button type="button" onClick={onToggleSavedPanel}
+                    aria-label="저장목록 닫기"
+                    className="flex items-center gap-1 rounded-lg px-2 py-1 text-xs font-medium text-[#6B6882] hover:bg-[#EEEEFF] hover:text-[#4F46E5]">
+                    닫기 <X className="h-3.5 w-3.5" strokeWidth={2} />
+                  </button>
+                </div>
+                <div className="px-1">
+                  <SavedItemsList items={savedItems} onRemove={onRemoveSavedItem} />
+                </div>
+              </div>
+            ) : historyGroups.map((group) => (
               <div key={group.label} className="mb-3">
                 <p className="px-2 py-1 text-[11px] uppercase tracking-widest text-[#A8A6C0] font-semibold">
                   {group.label}

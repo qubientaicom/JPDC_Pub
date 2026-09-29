@@ -1,8 +1,9 @@
 import { useState, useEffect, useRef } from 'react';
-import { Sparkles, Paperclip, ArrowUp, Zap, PenTool, Code, Globe, FileText, BookmarkCheck, Bell, Menu, Users, ChevronDown, ChevronLeft, ChevronRight, CheckCircle2, BarChart2, Calendar, Mail, Layers, Star, Shield, Store, type LucideIcon } from 'lucide-react';
+import { Sparkles, Paperclip, ArrowUp, Zap, PenTool, Code, Globe, FileText, BookmarkCheck, Bell, Menu, Users, ChevronDown, ChevronLeft, ChevronRight, CheckCircle2, BarChart2, Calendar, Mail, Layers, Star, Shield, Store, X, type LucideIcon } from 'lucide-react';
 import type { SavedItem } from '../components/SavedPanel';
 import Tooltip from '../components/Tooltip';
 import { useTheme } from '../context/ThemeContext';
+import { MAX_ATTACHMENTS, type MessageAttachment } from '../types/conversation';
 
 const MODES = ['회의록 문장정리', '이메일 문체변경', '번역', '보도자료'];
 
@@ -130,8 +131,8 @@ export default function HomeView({
   onNavigate,
 }: {
   onOpenBriefing?: () => void;
-  onSubmit?: (text: string) => void;
-  onStartWithAssistant?: (ctx: { name: string; starters: string[]; desc?: string }, initialQuery?: string) => void;
+  onSubmit?: (text: string, attachments?: MessageAttachment[]) => void;
+  onStartWithAssistant?: (ctx: { name: string; starters: string[]; desc?: string }, initialQuery?: string, attachments?: MessageAttachment[]) => void;
   savedItems?: SavedItem[];
   savedPanelOpen?: boolean;
   onToggleSavedPanel?: () => void;
@@ -149,6 +150,7 @@ export default function HomeView({
 
   interface FileEntry { id: number; file: File; status: 'indexing' | 'done'; progress: number; }
   const [attachedFiles, setAttachedFiles] = useState<FileEntry[]>([]);
+  const [attachmentNotice, setAttachmentNotice] = useState('');
   const fileInputRef = useRef<HTMLInputElement>(null);
   const nextId = useRef(0);
 
@@ -200,29 +202,39 @@ export default function HomeView({
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const incoming = Array.from(e.target.files ?? []);
     if (!incoming.length) return;
-    setAttachedFiles(prev => {
-      const names = new Set(prev.map(f => f.file.name));
-      const fresh: FileEntry[] = incoming
-        .filter(f => !names.has(f.name))
-        .map(f => ({ id: nextId.current++, file: f, status: 'indexing', progress: 0 }));
-      return [...prev, ...fresh];
-    });
+    const names = new Set(attachedFiles.map(f => `${f.file.name}:${f.file.size}`));
+    const unique = incoming.filter(f => !names.has(`${f.name}:${f.size}`));
+    const fresh: FileEntry[] = unique
+      .slice(0, MAX_ATTACHMENTS - attachedFiles.length)
+      .map(file => ({ id: nextId.current++, file, status: 'indexing', progress: 0 }));
+    setAttachmentNotice(unique.length > fresh.length ? `첨부파일은 최대 ${MAX_ATTACHMENTS}개까지 추가할 수 있습니다.` : '');
+    setAttachedFiles(prev => [...prev, ...fresh]);
     e.target.value = '';
   };
-  const removeFile = (id: number) => setAttachedFiles(prev => prev.filter(f => f.id !== id));
+  const removeFile = (id: number) => {
+    setAttachedFiles(prev => prev.filter(f => f.id !== id));
+    setAttachmentNotice('');
+  };
 
   const doSubmit = () => {
     if (!value.trim() && attachedFiles.length === 0) return;
+    const attachments = attachedFiles.map(({ file }) => ({
+      name: file.name,
+      size: file.size,
+      type: file.type,
+    }));
     if (selectedAssistant) {
       onStartWithAssistant?.(
         { name: selectedAssistant, starters: MODE_STARTERS[selectedAssistant] ?? [], desc: undefined },
         value.trim(),
+        attachments,
       );
     } else {
-      onSubmit?.(value.trim());
+      onSubmit?.(value.trim(), attachments);
     }
     setValue('');
     setAttachedFiles([]);
+    setAttachmentNotice('');
     if (fileInputRef.current) fileInputRef.current.value = '';
   };
   const [assistantOpen, setAssistantOpen] = useState(false);
@@ -318,7 +330,20 @@ export default function HomeView({
           <div className="bg-white rounded-2xl border border-[#E4E2F0] shadow-sm hover:border-[#C7C3F7] focus-within:border-[#4F46E5] focus-within:shadow-[0_0_0_3px_rgba(79,70,229,0.08)] transition-all">
             {/* 첨부 파일 칩 */}
             {attachedFiles.length > 0 && (
-              <div className="flex flex-wrap gap-2 px-4 pt-3 pb-1">
+              <>
+              <div className="flex min-w-0 flex-col gap-1 px-4 pt-3 pb-1 sm:hidden">
+                {attachedFiles.map(entry => (
+                  <div key={entry.id} className="flex min-w-0 items-center gap-2 rounded-lg bg-[#F4F3FC] px-2.5 py-1.5">
+                    <span className="min-w-0 flex-1 truncate text-[12px] text-[#6B6882]" title={entry.file.name}>{entry.file.name}</span>
+                    <button type="button" onClick={() => removeFile(entry.id)}
+                      className="flex h-5 w-5 shrink-0 items-center justify-center rounded text-[#8A87A3] hover:text-[#4F46E5]"
+                      aria-label={`${entry.file.name} 첨부 제거`}>
+                      <X className="h-3.5 w-3.5" strokeWidth={2} />
+                    </button>
+                  </div>
+                ))}
+              </div>
+              <div className="hidden flex-wrap gap-2 px-4 pt-3 pb-1 sm:flex">
                 {attachedFiles.map(entry => {
                   const { bg, text } = fileAccent(entry.file.name);
                   const ext = entry.file.name.split('.').pop()?.toUpperCase() ?? 'FILE';
@@ -368,6 +393,10 @@ export default function HomeView({
                   );
                 })}
               </div>
+              </>
+            )}
+            {attachmentNotice && (
+              <p className="px-4 pt-1 text-[11px] font-medium text-[#B45309]" role="status">{attachmentNotice}</p>
             )}
             <textarea
               value={value}
