@@ -1064,7 +1064,7 @@ function AssistantSelectPanel({
 /* ══════════════════════════════════════════════════════════════
    모호한 의도 — 좌(RAG 지침) + 우(비서 찾기) 분할 패널
 ══════════════════════════════════════════════════════════════ */
-type QueryRoute = 'instruction' | 'erp';
+type QueryRoute = 'instruction' | 'erp' | 'both';
 
 function RouteSelectionPanel({
   query,
@@ -1110,6 +1110,15 @@ function RouteSelectionPanel({
               <ArrowRight className="w-3.5 h-3.5 shrink-0" strokeWidth={2} />
             </button>
           </div>
+          <button
+            type="button"
+            onClick={() => onSelect('both')}
+            className="mt-2 w-full flex items-center gap-2.5 px-3.5 py-3 rounded-xl border border-[#C7C3F7] bg-[#F4F3FF] text-left text-[12.5px] font-semibold text-[#4F46E5] hover:bg-[#EEEEFF] hover:border-[#A9A3F0] transition-colors"
+          >
+            <Layers className="w-4 h-4 shrink-0" strokeWidth={1.8} />
+            <span className="flex-1">지침과 ERP 데이터 모두 찾을까요?</span>
+            <ArrowRight className="w-3.5 h-3.5 shrink-0" strokeWidth={2} />
+          </button>
         </div>
       </div>
     </div>
@@ -1432,6 +1441,7 @@ function RagTagAssistantPanel({
   onSelectAssistant,
   onContinue,
   actionBar,
+  showAssistant = true,
 }: {
   query: string;
   streamingRag: boolean;
@@ -1440,10 +1450,11 @@ function RagTagAssistantPanel({
   onSelectAssistant: (candidate: CandidateAssistant) => void;
   onContinue: () => void;
   actionBar?: React.ReactNode;
+  showAssistant?: boolean;
 }) {
   const ragData = getAnswerData(query);
   const tagData = getTagStatsData(query);
-  const candidates = getAssistantCandidates(query);
+  const candidates = showAssistant ? getAssistantCandidates(query) : [];
   const [ragDone, setRagDone] = useState(!streamingRag);
   const [tagDone, setTagDone] = useState(!streamingTag);
   const reportedDone = useRef(false);
@@ -1466,9 +1477,11 @@ function RagTagAssistantPanel({
           <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[12px] font-semibold border"
             style={{ color: '#0F766E', background: '#F0FDFA', borderColor: '#99F6E4' }}>
             <Layers className="w-3 h-3" strokeWidth={2} />
-            RAG + TAG + 비서
+            {showAssistant ? 'RAG + TAG + 비서' : 'RAG + TAG'}
           </span>
-          <span className="text-[12px] text-[#A8A6C0]">지침, 업무 현황, 추천 비서를 함께 확인하세요</span>
+          <span className="text-[12px] text-[#A8A6C0]">
+            {showAssistant ? '지침, 업무 현황, 추천 비서를 함께 확인하세요' : '지침과 ERP 업무 현황을 함께 확인하세요'}
+          </span>
         </div>
 
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 items-start">
@@ -1557,7 +1570,7 @@ function RagTagAssistantPanel({
         </div>
 
         {allDone && actionBar}
-        {allDone && (
+        {allDone && showAssistant && (
           <AssistantSelectPanel
             query={query}
             candidates={candidates}
@@ -2344,6 +2357,7 @@ type Message =
   | { role: 'assistant'; kind: 'ambiguous'; query: string; streaming: boolean }
   | { role: 'assistant'; kind: 'route-select'; query: string }
   | { role: 'assistant'; kind: 'rag-ab'; query: string; streamingA: boolean; streamingB: boolean; selected?: 'A' | 'B' }
+  | { role: 'assistant'; kind: 'rag-tag'; query: string; streamingRag: boolean; streamingTag: boolean }
   | { role: 'assistant'; kind: 'rag-tag-assistant'; query: string; streamingRag: boolean; streamingTag: boolean }
   | { role: 'assistant'; kind: 'assistant-intro'; name: string; starters: string[]; desc?: string; switchNotice?: string }
   | { role: 'assistant'; kind: 'minutes-request'; streaming: boolean }
@@ -3038,6 +3052,8 @@ export default function ConversationView({
 
       if (route === 'instruction') {
         next[idx] = { role: 'assistant', kind: 'instruction', streaming: true };
+      } else if (route === 'both') {
+        next[idx] = { role: 'assistant', kind: 'rag-tag', query: current.query, streamingRag: true, streamingTag: true };
       } else {
         next[idx] = {
           role: 'assistant',
@@ -3195,7 +3211,7 @@ export default function ConversationView({
     if (msg.role !== 'assistant' || stoppedSet.has(index) || answerDoneSet.has(index)) return active;
     if ('streaming' in msg && msg.streaming) return index;
     if (msg.kind === 'rag-ab' && (msg.streamingA || msg.streamingB)) return index;
-    if (msg.kind === 'rag-tag-assistant' && (msg.streamingRag || msg.streamingTag)) return index;
+    if ((msg.kind === 'rag-tag' || msg.kind === 'rag-tag-assistant') && (msg.streamingRag || msg.streamingTag)) return index;
     return active;
   }, -1);
 
@@ -3361,8 +3377,8 @@ export default function ConversationView({
               );
             }
 
-            /* ── RAG 지침 + TAG 현황 + 추천 비서 ── */
-            if (msg.kind === 'rag-tag-assistant') {
+            /* ── RAG 지침 + TAG 현황 (선택적으로 추천 비서) ── */
+            if (msg.kind === 'rag-tag' || msg.kind === 'rag-tag-assistant') {
               return (
                 <RagTagAssistantPanel
                   key={i}
@@ -3371,7 +3387,8 @@ export default function ConversationView({
                   streamingTag={msg.streamingTag}
                   onDone={() => markDone(i)}
                   onSelectAssistant={c => handleSelectAssistant(i, c)}
-                   onContinue={handleContinueQuery}
+                  onContinue={handleContinueQuery}
+                  showAssistant={msg.kind === 'rag-tag-assistant'}
                   actionBar={
                     <ActionBar
                       query={msg.query}
