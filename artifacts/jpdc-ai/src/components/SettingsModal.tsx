@@ -315,7 +315,7 @@ function AssistantOrderPanel({ order, onReorder }: { order: string[]; onReorder:
       <div>
         <h3 className="text-[14px] font-bold text-[#1A1826] mb-1">비서 표시 순서</h3>
         <p className="text-[12px] text-[#A8A6C0] leading-relaxed">
-          순서를 조정하면 질의 입력창 '비서 선택' 목록에 <strong className="text-[#4F46E5]">아래부터 위로</strong> 순서대로 반영됩니다.
+          순서를 조정하면 홈 화면 질의 입력창의 '비서 선택' 목록에 <strong className="text-[#4F46E5]">아래부터 위로</strong> 순서대로 반영됩니다.
         </p>
       </div>
       <div className="h-px bg-[#E4E2F0]" />

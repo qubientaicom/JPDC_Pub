@@ -2,6 +2,10 @@ import { MAX_ATTACHMENTS, type MessageAttachment } from '../types/conversation';
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import type { SavedItem } from '../components/SavedPanel';
 import Tooltip from '../components/Tooltip';
+import {
+  AlertDialog, AlertDialogCancel, AlertDialogContent, AlertDialogDescription,
+  AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
+} from '../components/ui/alert-dialog';
 import { useTheme } from '../context/ThemeContext';
 import jpdcLogo from '../assets/jpdc-logo.png';
 import {
@@ -1052,7 +1056,7 @@ function AssistantSelectPanel({
           </div>
           <p className="text-[13.5px] text-[#1A1826] leading-relaxed">
             <span className="font-semibold">"{query.length > 30 ? query.slice(0, 30) + '…' : query}"</span> 질의를 처리할 수 있는 유사한 비서를 찾았습니다.
-            아래 비서 중 하나를 선택하면 바로 대화를 시작합니다.
+            아래 비서 중 하나를 선택하면 안내를 확인한 뒤 새 대화를 시작할 수 있습니다.
           </p>
         </div>
         {grid}
@@ -2367,8 +2371,6 @@ type Message =
   | { role: 'assistant'; kind: 'follow-up-prompt' };
 
 /* ── 입력창 ───────────────────────────────────────────────── */
-const MY_ASSISTANTS = ['회의록 문장정리', '이메일 문체변경', '번역', '보도자료'];
-
 const MY_ASSISTANT_STARTERS: Record<string, string[]> = {
   '회의록 문장정리': ['오늘 계약 검토 회의 내용을 정리해 줘', '안건 3개로 구성된 회의록 초안을 작성해 줘', '액션아이템만 따로 추출해 줄 수 있어?'],
   '이메일 문체변경': ['이 이메일을 정중한 격식체로 바꿔줘', '비격식 친근한 문체로 변환해 줘', '영어 이메일을 한국어 공문 스타일로 바꿔줘'],
@@ -2422,7 +2424,6 @@ function InputBar({
   focusRequest = 0,
   awaitingFollowUp = false,
   activeAssistantName = null,
-  assistantOrder = [],
 }: {
   onSend: (text: string, assistantName?: string | null, attachments?: MessageAttachment[]) => void;
   onStop: () => void;
@@ -2430,21 +2431,13 @@ function InputBar({
   focusRequest?: number;
   awaitingFollowUp?: boolean;
   activeAssistantName?: string | null;
-  assistantOrder?: string[];
 }) {
   const [value, setValue] = useState('');
-  const [assistantOpen, setAssistantOpen] = useState(false);
-  const [selectedAssistant, setSelectedAssistant] = useState<string | null>(null);
   const [attachedFiles, setAttachedFiles] = useState<FileEntry[]>([]);
   const [attachmentNotice, setAttachmentNotice] = useState('');
   const fileInputRef = useRef<HTMLInputElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const nextId = useRef(0);
-  const displayedAssistantName = selectedAssistant ?? activeAssistantName;
-  const isPendingAssistantChange = Boolean(
-    selectedAssistant && selectedAssistant !== activeAssistantName
-  );
-
   useEffect(() => {
     if (focusRequest === 0) return;
     const timer = setTimeout(() => textareaRef.current?.focus(), 0);
@@ -2485,30 +2478,16 @@ function InputBar({
   const doSend = () => {
     if (isAnswering) return;
     if (!value.trim() && attachedFiles.length === 0) return;
-    onSend(value.trim(), selectedAssistant, attachedFiles.map(({ file }) => ({
+    onSend(value.trim(), undefined, attachedFiles.map(({ file }) => ({
       name: file.name,
       size: file.size,
       type: file.type,
     })));
     setValue('');
-    setSelectedAssistant(null);
     setAttachedFiles([]);
     setAttachmentNotice('');
     if (fileInputRef.current) fileInputRef.current.value = '';
   };
-  const dropdownRef = useRef<HTMLDivElement>(null);
-
-  useEffect(() => {
-    if (!assistantOpen) return;
-    const handler = (e: MouseEvent) => {
-      if (dropdownRef.current && !dropdownRef.current.contains(e.target as Node)) {
-        setAssistantOpen(false);
-      }
-    };
-    document.addEventListener('mousedown', handler);
-    return () => document.removeEventListener('mousedown', handler);
-  }, [assistantOpen]);
-
   const handleKey = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
     if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); doSend(); }
   };
@@ -2536,17 +2515,17 @@ function InputBar({
       <div className="max-w-[920px] mx-auto">
         <div className="bg-white rounded-2xl border border-[#E4E2F0] shadow-sm hover:border-[#C7C3F7] focus-within:border-[#4F46E5] focus-within:shadow-[0_0_0_3px_rgba(79,70,229,0.08)] transition-all">
 
-          {/* 선택된 비서 및 첨부 파일 목록 */}
-          {(displayedAssistantName || attachedFiles.length > 0) && (
+          {/* 활성 비서 및 첨부 파일 목록 */}
+          {(activeAssistantName || attachedFiles.length > 0) && (
             <div className="flex flex-wrap gap-2 px-4 pt-3 pb-1">
-              {displayedAssistantName && (
+              {activeAssistantName && (
                 <div
                   className="flex h-fit max-w-full min-w-0 items-center gap-1.5 rounded-lg border border-[#C7C3F7] bg-[#EEEEFF] px-2.5 py-2 text-[#4F46E5]"
-                  title={displayedAssistantName}
+                  title={activeAssistantName}
                 >
                   <Users className="h-3.5 w-3.5 shrink-0" strokeWidth={1.9} />
                   <span className="max-w-[220px] truncate text-[12px] font-semibold">
-                    {displayedAssistantName}
+                    {activeAssistantName}
                   </span>
                   <span className="shrink-0 text-[10px] font-medium text-[#8A84C7]">비서</span>
                 </div>
@@ -2628,15 +2607,6 @@ function InputBar({
             <p className="px-4 pt-1 text-[11px] font-medium text-[#B45309]" role="status">{attachmentNotice}</p>
           )}
 
-          {isPendingAssistantChange && (
-            <div className="mx-4 mt-2 flex items-start gap-2 rounded-xl border border-[#D9D6F5] bg-[#F7F6FF] px-3.5 py-2.5">
-              <Users className="mt-0.5 h-3.5 w-3.5 shrink-0 text-[#4F46E5]" strokeWidth={2} />
-              <p className="text-[11.5px] font-medium leading-relaxed text-[#6B6882]">
-                질문을 전송하면 기존 대화는 저장되고, <span className="font-semibold text-[#4F46E5]">{selectedAssistant}</span>과의 새 대화가 시작됩니다.
-              </p>
-            </div>
-          )}
-
           {/* 텍스트 입력 */}
           <textarea ref={textareaRef} value={value} onChange={e => setValue(e.target.value)} onKeyDown={handleKey}
             className="w-full px-5 pt-4 pb-2 bg-transparent border-none outline-none text-[#1A1826] placeholder:text-[#A8A6C0] resize-none text-base leading-relaxed"
@@ -2670,45 +2640,6 @@ function InputBar({
                 <span className="text-[11px] font-semibold text-[#4F46E5] ml-0.5">{attachedFiles.length}</span>
               )}
 
-              {/* 비서 선택 드롭다운 */}
-              <div className="relative ml-1" ref={dropdownRef}>
-                <button
-                  type="button"
-                  onClick={() => setAssistantOpen(v => !v)}
-                  className={`flex items-center gap-1 px-2 py-1 rounded-lg text-[11.5px] font-semibold transition-all border ${
-                    displayedAssistantName
-                      ? 'bg-[#EEEEFF] border-[#C7C3F7] text-[#4F46E5]'
-                      : assistantOpen
-                        ? 'bg-[#F4F3FC] border-[#C7C3F7] text-[#4F46E5]'
-                        : 'bg-transparent border-transparent text-[#A8A6C0] hover:text-[#4F46E5] hover:bg-[#F4F3FC]'
-                  }`}>
-                  <Users className="w-3.5 h-3.5 shrink-0" strokeWidth={1.8} />
-                  <span>{displayedAssistantName ? '비서 다시 선택' : '비서 선택'}</span>
-                  <ChevronDown className="w-3 h-3 shrink-0 transition-transform" style={{ transform: assistantOpen ? 'rotate(180deg)' : 'none' }} />
-                </button>
-
-                {assistantOpen && (
-                  <div className="absolute bottom-full left-0 mb-2 w-48 bg-white rounded-xl border border-[#E4E2F0] shadow-lg overflow-hidden z-30">
-                    {[...(assistantOrder && assistantOrder.length > 0 ? assistantOrder : MY_ASSISTANTS)].reverse().map(a => (
-                      <button key={a} type="button"
-                        onClick={() => {
-                          setSelectedAssistant(a);
-                          setAssistantOpen(false);
-                          setTimeout(() => textareaRef.current?.focus(), 0);
-                        }}
-                        className={`w-full flex items-center gap-2 px-3 py-2.5 text-left text-[12.5px] font-medium transition-colors ${
-                          displayedAssistantName === a
-                            ? 'bg-[#EEEEFF] text-[#4F46E5]'
-                            : 'text-[#1A1826] hover:bg-[#F9F8FF]'
-                        }`}>
-                        {displayedAssistantName === a && <CheckCircle2 className="w-3.5 h-3.5 text-[#4F46E5] shrink-0" strokeWidth={2} />}
-                        {displayedAssistantName !== a && <div className="w-3.5 h-3.5 shrink-0" />}
-                        {a}
-                      </button>
-                    ))}
-                  </div>
-                )}
-              </div>
             </div>
             {isAnswering ? (
               <button type="button" onClick={onStop} aria-label="답변중지"
@@ -2947,7 +2878,6 @@ export default function ConversationView({
   notifPanelOpen = false,
   notifUnread = 0,
   onToggleNotifPanel,
-  assistantOrder,
   onNavigate,
 }: {
   initialQuery: string;
@@ -2963,7 +2893,6 @@ export default function ConversationView({
   notifPanelOpen?: boolean;
   notifUnread?: number;
   onToggleNotifPanel?: () => void;
-  assistantOrder?: string[];
   onNavigate?: (view: 'home' | 'market') => void;
 }) {
   const { theme } = useTheme();
@@ -2974,6 +2903,8 @@ export default function ConversationView({
   const [activeAssistantName, setActiveAssistantName] = useState<string | null>(assistantContext?.name ?? null);
   const [followUpFocusRequest, setFollowUpFocusRequest] = useState(0);
   const [awaitingFollowUp, setAwaitingFollowUp] = useState(false);
+  const [pendingAssistant, setPendingAssistant] = useState<CandidateAssistant | null>(null);
+  const [switchError, setSwitchError] = useState('');
   const bottomRef = useRef<HTMLDivElement>(null);
 
   /* classifying → thinking 전환 (1.1s) */
@@ -3066,53 +2997,45 @@ export default function ConversationView({
     });
   }, []);
 
-  /* 비서 선택 시 → instruction으로 전환 */
-  const handleSelectAssistant = useCallback((idx: number, candidate: CandidateAssistant) => {
-    // rag-prompt가 바로 뒤에 있으면 카드 선택 시 제거 (fallback-assistant 흐름)
-    const removeRagPrompt = (next: Message[]) => {
-      if (next[idx + 1]?.role === 'assistant' && (next[idx + 1] as { kind: string }).kind === 'rag-prompt') {
-        next.splice(idx + 1, 1);
-      }
-    };
+  const handleSelectAssistant = useCallback((_idx: number, candidate: CandidateAssistant) => {
+    setSwitchError('');
+    setPendingAssistant(candidate);
+  }, []);
 
-    // 회의록 비서는 인트로 흐름으로 연결
-    if (candidate.name === '회의록 문장정리') {
-      setActiveAssistantName('회의록 문장정리');
-      setMessages(prev => {
-        const next = [...prev];
-        const cur = prev[idx];
-        if (cur.role === 'assistant' && cur.kind === 'assistant-select') {
-          next[idx] = { role: 'assistant', kind: 'assistant-select', candidates: cur.candidates };
-        }
-        removeRagPrompt(next);
-        next.splice(idx + 1, 0,
-          { role: 'user', text: `${candidate.name} 비서로 진행해 주세요.` },
-          {
-            role: 'assistant', kind: 'assistant-intro',
-            name: '회의록 문장정리',
-            starters: MY_ASSISTANT_STARTERS['회의록 문장정리'] ?? [],
-            desc: undefined,
-          },
-        );
-        return next;
+  const confirmAssistantSwitch = () => {
+    if (!pendingAssistant) return;
+    try {
+      const storageKey = 'jpdc-ai-conversation-archive';
+      const stored = JSON.parse(localStorage.getItem(storageKey) ?? '[]');
+      const archive = Array.isArray(stored) ? stored : [];
+      archive.unshift({
+        id: `${Date.now()}-${activeAssistantName ?? 'general'}`,
+        assistantName: activeAssistantName,
+        savedAt: new Date().toISOString(),
+        messages,
       });
+      localStorage.setItem(storageKey, JSON.stringify(archive.slice(0, 50)));
+    } catch {
+      setSwitchError('대화를 저장하지 못했습니다. 브라우저 저장 공간을 확인한 뒤 다시 시도해 주세요.');
       return;
     }
 
-    setMessages(prev => {
-      const next = [...prev];
-      const cur = prev[idx];
-      if (cur.role === 'assistant' && cur.kind === 'assistant-select') {
-        next[idx] = { role: 'assistant', kind: 'assistant-select', candidates: cur.candidates };
-      }
-      removeRagPrompt(next);
-      next.splice(idx + 1, 0,
-        { role: 'user', text: `${candidate.name} 비서로 진행해 주세요.` },
-        { role: 'assistant', kind: 'instruction', streaming: true },
-      );
-      return next;
-    });
-  }, []);
+    const candidate = pendingAssistant;
+    setActiveAssistantName(candidate.name);
+    setAnswerDoneSet(new Set());
+    setStoppedSet(new Set());
+    setAwaitingFollowUp(false);
+    setMessages([{
+      role: 'assistant',
+      kind: 'assistant-intro',
+      name: candidate.name,
+      starters: MY_ASSISTANT_STARTERS[candidate.name] ?? [],
+      desc: candidate.desc,
+      switchNotice: '이전 대화를 저장했습니다.',
+    }]);
+    setPendingAssistant(null);
+    setSwitchError('');
+  };
 
   const handleSend = (text: string, assistantName?: string | null, attachments: MessageAttachment[] = []) => {
     setAwaitingFollowUp(false);
@@ -3226,6 +3149,30 @@ export default function ConversationView({
 
   return (
     <div className="flex-1 flex flex-col h-full bg-white min-w-0">
+      <AlertDialog open={pendingAssistant !== null} onOpenChange={open => {
+        if (!open) {
+          setPendingAssistant(null);
+          setSwitchError('');
+        }
+      }}>
+        <AlertDialogContent className="mx-4 w-[calc(100%-2rem)] max-w-md rounded-2xl border-[#E4E2F0] bg-white">
+          <AlertDialogHeader>
+            <AlertDialogTitle className="text-[#1A1826]">새 대화를 시작할까요?</AlertDialogTitle>
+            <AlertDialogDescription className="text-[14px] leading-relaxed text-[#6B6882]">
+              지금 대화는 저장되고, 새대화로 시작합니다.
+              <span className="mt-2 block font-semibold text-[#4F46E5]">{pendingAssistant?.name} 비서</span>
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          {switchError && <p role="alert" className="text-[13px] text-red-600">{switchError}</p>}
+          <AlertDialogFooter>
+            <AlertDialogCancel className="border-[#E4E2F0] bg-white text-[#6B6882]">취소</AlertDialogCancel>
+            <button type="button" onClick={confirmAssistantSwitch}
+              className="inline-flex h-9 items-center justify-center rounded-md bg-[#4F46E5] px-4 py-2 text-sm font-medium text-white hover:bg-[#4338CA]">
+              새 대화 시작
+            </button>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
       {/* Topbar */}
       <div className="h-12 flex items-center justify-between px-4 md:px-6 bg-white border-b border-[#E4E2F0] shrink-0">
         <button type="button" onClick={onToggleSidebar}
@@ -3651,7 +3598,6 @@ export default function ConversationView({
         focusRequest={followUpFocusRequest}
         awaitingFollowUp={awaitingFollowUp}
         activeAssistantName={activeAssistantName}
-        assistantOrder={assistantOrder}
       />
     </div>
   );

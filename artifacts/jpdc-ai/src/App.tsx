@@ -167,7 +167,6 @@ function App() {
                 notifPanelOpen={notifPanelOpen}
                 notifUnread={notifUnread}
                 onToggleNotifPanel={toggleNotifPanel}
-                assistantOrder={assistantOrder}
                 onNavigate={setActiveView}
               />
             )}
