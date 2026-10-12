@@ -1,4 +1,4 @@
-import { MAX_ATTACHMENTS, type MessageAttachment } from '../types/conversation';
+import { MAX_ATTACHMENTS, MAX_KNOWLEDGE_ATTACHMENTS, ATTACHMENT_LIMIT_NOTICE, prepareAttachments, type AttachmentRole, type MessageAttachment } from '../types/conversation';
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import type { SavedItem } from '../components/SavedPanel';
 import Tooltip from '../components/Tooltip';
@@ -2413,8 +2413,7 @@ function fileAccentColor(name: string) {
 interface FileEntry {
   id: number;
   file: File;
-  status: 'indexing' | 'done';
-  progress: number; // 0–100
+  role: AttachmentRole;
 }
 
 function InputBar({
@@ -2444,44 +2443,26 @@ function InputBar({
     return () => clearTimeout(timer);
   }, [focusRequest]);
 
-  /* 임베딩 애니메이션 — 새로 추가된 파일마다 200ms 스태거로 시작 */
-  useEffect(() => {
-    const indexing = attachedFiles.filter(f => f.status === 'indexing');
-    if (!indexing.length) return;
-    const timers: ReturnType<typeof setTimeout>[] = [];
-    indexing.forEach((entry, i) => {
-      const duration = 1200 + Math.random() * 1000; // 1.2~2.2s
-      const startDelay = i * 200;
-      const tick = 40;
-      const steps = duration / tick;
-      let step = 0;
-      const t = setTimeout(() => {
-        const iv = setInterval(() => {
-          step++;
-          const progress = Math.min(100, Math.round((step / steps) * 100));
-          setAttachedFiles(prev =>
-            prev.map(f => f.id === entry.id
-              ? { ...f, progress, status: progress >= 100 ? 'done' : 'indexing' }
-              : f
-            )
-          );
-          if (progress >= 100) clearInterval(iv);
-        }, tick);
-        timers.push(iv as unknown as ReturnType<typeof setTimeout>);
-      }, startDelay);
-      timers.push(t);
+  const templateCount = attachedFiles.filter(f => f.role === 'template').length;
+  const knowledgeCount = attachedFiles.length - templateCount;
+
+  const changeFileRole = (id: number, role: AttachmentRole) => {
+    setAttachedFiles(prev => {
+      if (role === 'template' && prev.some(f => f.id !== id && f.role === 'template')) return prev;
+      if (role === 'knowledge' && prev.filter(f => f.id !== id && f.role === 'knowledge').length >= MAX_KNOWLEDGE_ATTACHMENTS) return prev;
+      return prev.map(f => f.id === id ? { ...f, role } : f);
     });
-    return () => timers.forEach(clearTimeout);
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [attachedFiles.map(f => f.id).join(',')]);
+    setAttachmentNotice('');
+  };
 
   const doSend = () => {
     if (isAnswering) return;
     if (!value.trim() && attachedFiles.length === 0) return;
-    onSend(value.trim(), undefined, attachedFiles.map(({ file }) => ({
+    onSend(value.trim(), undefined, attachedFiles.map(({ file, role }) => ({
       name: file.name,
       size: file.size,
       type: file.type,
+      role,
     })));
     setValue('');
     setAttachedFiles([]);
@@ -2495,12 +2476,9 @@ function InputBar({
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const incoming = Array.from(e.target.files ?? []);
     if (!incoming.length) return;
-    const names = new Set(attachedFiles.map(f => `${f.file.name}:${f.file.size}`));
-    const unique = incoming.filter(f => !names.has(`${f.name}:${f.size}`));
-    const fresh: FileEntry[] = unique
-      .slice(0, MAX_ATTACHMENTS - attachedFiles.length)
-      .map(file => ({ id: nextId.current++, file, status: 'indexing', progress: 0 }));
-    setAttachmentNotice(unique.length > fresh.length ? `첨부파일은 최대 ${MAX_ATTACHMENTS}개까지 추가할 수 있습니다.` : '');
+    const { files, notice } = prepareAttachments(attachedFiles, incoming);
+    const fresh: FileEntry[] = files.map(entry => ({ ...entry, id: nextId.current++ }));
+    setAttachmentNotice(notice);
     setAttachedFiles(prev => [...prev, ...fresh]);
     e.target.value = '';
   };
@@ -2514,6 +2492,12 @@ function InputBar({
     <div className="shrink-0 px-6 py-4 border-t border-[#E4E2F0] bg-white">
       <div className="max-w-[920px] mx-auto">
         <div className="bg-white rounded-2xl border border-[#E4E2F0] shadow-sm hover:border-[#C7C3F7] focus-within:border-[#4F46E5] focus-within:shadow-[0_0_0_3px_rgba(79,70,229,0.08)] transition-all">
+          {templateCount > 0 && (
+            <div role="status" className="flex items-start gap-2 rounded-t-2xl border-b border-amber-200 bg-amber-50 px-4 py-2.5 text-[12px] font-medium text-amber-800">
+              <FileText className="mt-0.5 h-3.5 w-3.5 shrink-0" />
+              서식 1개 지정 — 출력의 구조·목차·문체 참조용이며, 내용 인용 대상에서 제외합니다.
+            </div>
+          )}
 
           {/* 활성 비서 및 첨부 파일 목록 */}
           {(activeAssistantName || attachedFiles.length > 0) && (
@@ -2530,74 +2514,24 @@ function InputBar({
                   <span className="shrink-0 text-[10px] font-medium text-[#8A84C7]">비서</span>
                 </div>
               )}
-              {attachedFiles.length > 0 && (
-                <div className="flex w-full min-w-0 flex-col gap-1 sm:hidden">
-                  {attachedFiles.map(entry => (
-                    <div key={entry.id} className="flex min-w-0 items-center gap-2 rounded-lg bg-[#F4F3FC] px-2.5 py-1.5">
-                      <span className="min-w-0 flex-1 truncate text-[12px] text-[#6B6882]" title={entry.file.name}>{entry.file.name}</span>
-                      <button type="button" onClick={() => removeFile(entry.id)}
-                        className="flex h-5 w-5 shrink-0 items-center justify-center rounded text-[#8A87A3] hover:text-[#4F46E5]"
-                        aria-label={`${entry.file.name} 첨부 제거`}>
-                        <X className="h-3.5 w-3.5" strokeWidth={2} />
-                      </button>
-                    </div>
-                  ))}
-                </div>
-              )}
               {attachedFiles.map(entry => {
-                const { bg, text } = fileAccentColor(entry.file.name);
-                const ext = entry.file.name.split('.').pop()?.toUpperCase() ?? 'FILE';
-                const isDone = entry.status === 'done';
+                const isTemplate = entry.role === 'template';
+                const templateUnavailable = !isTemplate && templateCount > 0;
                 return (
-                  <div key={entry.id}
-                    className="relative hidden flex-col gap-1 pl-2.5 pr-1.5 pt-1.5 pb-1 rounded-lg border overflow-hidden transition-all group/chip sm:flex"
-                    style={{ borderColor: isDone ? `${text}33` : `${text}55`, background: bg, minWidth: 140, maxWidth: 200 }}>
-                    {/* 상단 행: 배지 + 아이콘 상태 + 삭제 */}
-                    <div className="flex items-center gap-2">
-                      <span className="text-[10px] font-black tracking-wide leading-none px-1.5 py-0.5 rounded-md shrink-0"
-                        style={{ background: text, color: '#fff' }}>{ext}</span>
-                      <div className="flex-1 min-w-0">
-                        <p className="text-[12px] font-semibold leading-tight truncate" style={{ color: text }}>
-                          {entry.file.name}
-                        </p>
-                        <p className="text-[10px] leading-tight" style={{ color: `${text}99` }}>
-                          {fmtSize(entry.file.size)}
-                        </p>
-                      </div>
-                      {/* 완료 체크 / 삭제 */}
-                      {isDone ? (
-                        <button type="button" onClick={() => removeFile(entry.id)}
-                          className="w-4 h-4 rounded-full flex items-center justify-center shrink-0 opacity-40 group-hover/chip:opacity-100 transition-opacity"
-                          style={{ background: `${text}22` }}>
-                          <X className="w-2.5 h-2.5" style={{ color: text }} strokeWidth={2.5} />
-                        </button>
-                      ) : (
-                        <div className="w-4 h-4 rounded-full flex items-center justify-center shrink-0"
-                          style={{ background: `${text}15` }}>
-                          {/* 미니 스피너 */}
-                          <svg className="animate-spin" width="10" height="10" viewBox="0 0 10 10" fill="none">
-                            <circle cx="5" cy="5" r="3.5" stroke={`${text}33`} strokeWidth="2"/>
-                            <path d="M5 1.5A3.5 3.5 0 0 1 8.5 5" stroke={text} strokeWidth="2" strokeLinecap="round"/>
-                          </svg>
-                        </div>
-                      )}
-                    </div>
-                    {/* 프로그레스 바 */}
-                    <div className="h-[3px] rounded-full overflow-hidden" style={{ background: `${text}18` }}>
-                      <div
-                        className="h-full rounded-full transition-all duration-75"
-                        style={{
-                          width: `${entry.progress}%`,
-                          background: isDone
-                            ? `linear-gradient(90deg, ${text}aa, ${text})`
-                            : `linear-gradient(90deg, ${text}66, ${text})`,
-                        }}
-                      />
-                    </div>
-                    {/* 상태 텍스트 */}
-                    <p className="text-[8.5px] font-semibold leading-none" style={{ color: `${text}88` }}>
-                      {isDone ? '✓ 임베딩 완료' : `벡터 인덱싱 중… ${entry.progress}%`}
-                    </p>
+                  <div key={entry.id} className={`flex w-full min-w-0 items-center gap-2 rounded-xl border px-3 py-2 sm:w-auto sm:max-w-[360px] ${isTemplate ? 'border-amber-500 bg-amber-50 text-amber-800' : 'border-[#E4E2F0] bg-white text-[#1A1826]'}`}>
+                    <FileText className={`h-4 w-4 shrink-0 ${isTemplate ? 'text-amber-700' : 'text-[#8A87A3]'}`} />
+                    <span className="min-w-0 flex-1 truncate text-[12px] font-semibold" title={`${entry.file.name} · ${fmtSize(entry.file.size)}`}>{entry.file.name}</span>
+                    <select aria-label={`${entry.file.name} 첨부 역할`} value={entry.role}
+                      onChange={e => changeFileRole(entry.id, e.target.value as AttachmentRole)}
+                      className={`max-w-[85px] shrink-0 cursor-pointer rounded-md px-1.5 py-1 text-[11px] font-semibold outline-none focus:ring-2 focus:ring-[#4F46E5] ${isTemplate ? 'bg-amber-700 text-white' : 'bg-[#EEEEFF] text-[#4F46E5]'}`}>
+                      <option value="knowledge" disabled={isTemplate && knowledgeCount >= MAX_KNOWLEDGE_ATTACHMENTS}>지식{isTemplate && knowledgeCount >= MAX_KNOWLEDGE_ATTACHMENTS ? ' (10개 제한)' : ''}</option>
+                      <option value="template" disabled={templateUnavailable}>서식{templateUnavailable ? ' (1개 제한)' : ''}</option>
+                    </select>
+                    <button type="button" onClick={() => removeFile(entry.id)}
+                      className="flex h-6 w-6 shrink-0 items-center justify-center rounded-md opacity-60 hover:bg-black/5 hover:opacity-100"
+                      aria-label={`${entry.file.name} 첨부 제거`}>
+                      <X className="h-3.5 w-3.5" strokeWidth={2} />
+                    </button>
                   </div>
                 );
               })}
@@ -2624,7 +2558,7 @@ function InputBar({
                 onChange={handleFileChange}
                 style={{ display: 'none' }}
               />
-              <Tooltip label="파일 첨부">
+              <Tooltip label={ATTACHMENT_LIMIT_NOTICE}>
                 <label
                   htmlFor="jpdc-file-attach"
                   className={`cursor-pointer p-1.5 rounded-lg transition-colors flex items-center justify-center ${
@@ -2637,7 +2571,7 @@ function InputBar({
                 </label>
               </Tooltip>
               {attachedFiles.length > 0 && (
-                <span className="text-[11px] font-semibold text-[#4F46E5] ml-0.5">{attachedFiles.length}</span>
+                <span className="ml-1 text-[11px] font-medium text-[#6B6882]">지식 {knowledgeCount} · 서식 {templateCount}</span>
               )}
 
             </div>
@@ -2660,6 +2594,12 @@ function InputBar({
         <p className="text-center text-[10.5px] text-[#A8A6C0] mt-2">
           JPDC AI는 실수를 할 수 있습니다. 중요한 정보는 반드시 원문을 확인하세요.
         </p>
+        {attachedFiles.length > 0 && (
+          <p className="mt-2 text-[11px] leading-relaxed text-[#6B6882]">
+            <span className="font-semibold text-[#4F46E5]">지식</span> — 답변의 근거·인용 자료로 여러 개 지정할 수 있습니다.{' '}
+            <span className="font-semibold text-amber-700">서식</span> — 출력 형식 참조용으로 1개만 지정할 수 있습니다. 다른 서식을 선택하려면 기존 서식을 지식으로 변경하거나 제거하세요.
+          </p>
+        )}
       </div>
     </div>
   );
@@ -3221,11 +3161,14 @@ export default function ConversationView({
                         const accent = fileAccentColor(file.name);
                         return (
                           <div key={`${file.name}-${index}`} title={file.name}
-                            className="flex h-28 w-[120px] min-w-0 flex-col justify-between rounded-xl border border-[#E4E2F0] bg-white p-3 shadow-sm sm:w-[140px]">
+                             className={`flex h-32 w-[120px] min-w-0 flex-col justify-between rounded-xl border p-3 shadow-sm sm:w-[140px] ${file.role === 'template' ? 'border-amber-400 bg-amber-50' : 'border-[#E4E2F0] bg-white'}`}>
                             <div className="flex min-w-0 items-start gap-1.5">
                               <FileText className="mt-0.5 h-4 w-4 shrink-0" style={{ color: accent.text }} strokeWidth={1.8} />
                               <span className="line-clamp-3 break-all text-[11px] font-medium leading-snug text-[#1A1826]">{file.name}</span>
                             </div>
+                             <span className={`self-start rounded-md px-1.5 py-0.5 text-[10px] font-semibold ${file.role === 'template' ? 'bg-amber-700 text-white' : 'bg-[#EEEEFF] text-[#4F46E5]'}`}>
+                               {file.role === 'template' ? '서식' : '지식'}
+                             </span>
                             <div className="flex items-center justify-between gap-1">
                               <span className="rounded-md px-1.5 py-0.5 text-[10px] font-semibold" style={{ background: accent.bg, color: accent.text }}>{ext}</span>
                               <span className="text-[10px] text-[#A8A6C0]">{fmtSize(file.size)}</span>

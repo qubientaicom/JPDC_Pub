@@ -3,7 +3,7 @@ import { Sparkles, Paperclip, ArrowUp, Zap, PenTool, Code, Globe, FileText, Book
 import type { SavedItem } from '../components/SavedPanel';
 import Tooltip from '../components/Tooltip';
 import { useTheme } from '../context/ThemeContext';
-import { MAX_ATTACHMENTS, type MessageAttachment } from '../types/conversation';
+import { MAX_KNOWLEDGE_ATTACHMENTS, ATTACHMENT_LIMIT_NOTICE, prepareAttachments, type AttachmentRole, type MessageAttachment } from '../types/conversation';
 
 const MODES = ['회의록 문장정리', '이메일 문체변경', '번역', '보도자료'];
 
@@ -148,7 +148,7 @@ export default function HomeView({
   const [mode, setMode] = useState<number | null>(null);
   const [value, setValue] = useState('');
 
-  interface FileEntry { id: number; file: File; status: 'indexing' | 'done'; progress: number; }
+  interface FileEntry { id: number; file: File; role: AttachmentRole; }
   const [attachedFiles, setAttachedFiles] = useState<FileEntry[]>([]);
   const [attachmentNotice, setAttachmentNotice] = useState('');
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -159,55 +159,24 @@ export default function HomeView({
     if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(0)}KB`;
     return `${(bytes / 1024 / 1024).toFixed(1)}MB`;
   };
-  const fileAccent = (name: string) => {
-    const ext = name.split('.').pop()?.toLowerCase() ?? '';
-    if (['jpg','jpeg','png','gif','webp','svg'].includes(ext)) return { bg: '#FFF7ED', text: '#EA580C' };
-    if (['pdf'].includes(ext)) return { bg: '#FEF2F2', text: '#DC2626' };
-    if (['xlsx','xls','csv'].includes(ext)) return { bg: '#F0FDF4', text: '#16A34A' };
-    if (['docx','doc','hwp','hwpx'].includes(ext)) return { bg: '#EFF6FF', text: '#2563EB' };
-    if (['pptx','ppt'].includes(ext)) return { bg: '#FFF7ED', text: '#D97706' };
-    if (['zip','7z','tar','gz'].includes(ext)) return { bg: '#F5F3FF', text: '#7C3AED' };
-    return { bg: '#F3F4F6', text: '#6B7280' };
-  };
+  const templateCount = attachedFiles.filter(f => f.role === 'template').length;
+  const knowledgeCount = attachedFiles.length - templateCount;
 
-  /* 임베딩 애니메이션 — 새 파일마다 200ms 스태거로 병렬 시작 */
-  useEffect(() => {
-    const indexing = attachedFiles.filter(f => f.status === 'indexing');
-    if (!indexing.length) return;
-    const timers: ReturnType<typeof setTimeout>[] = [];
-    indexing.forEach((entry, i) => {
-      const duration = 1200 + Math.random() * 1000;
-      const tick = 40;
-      const steps = duration / tick;
-      let step = 0;
-      const t = setTimeout(() => {
-        const iv = setInterval(() => {
-          step++;
-          const progress = Math.min(100, Math.round((step / steps) * 100));
-          setAttachedFiles(prev =>
-            prev.map(f => f.id === entry.id
-              ? { ...f, progress, status: progress >= 100 ? 'done' : 'indexing' }
-              : f)
-          );
-          if (progress >= 100) clearInterval(iv);
-        }, tick);
-        timers.push(iv as unknown as ReturnType<typeof setTimeout>);
-      }, i * 200);
-      timers.push(t);
+  const changeFileRole = (id: number, role: AttachmentRole) => {
+    setAttachedFiles(prev => {
+      if (role === 'template' && prev.some(f => f.id !== id && f.role === 'template')) return prev;
+      if (role === 'knowledge' && prev.filter(f => f.id !== id && f.role === 'knowledge').length >= MAX_KNOWLEDGE_ATTACHMENTS) return prev;
+      return prev.map(f => f.id === id ? { ...f, role } : f);
     });
-    return () => timers.forEach(clearTimeout);
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [attachedFiles.map(f => f.id).join(',')]);
+    setAttachmentNotice('');
+  };
 
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const incoming = Array.from(e.target.files ?? []);
     if (!incoming.length) return;
-    const names = new Set(attachedFiles.map(f => `${f.file.name}:${f.file.size}`));
-    const unique = incoming.filter(f => !names.has(`${f.name}:${f.size}`));
-    const fresh: FileEntry[] = unique
-      .slice(0, MAX_ATTACHMENTS - attachedFiles.length)
-      .map(file => ({ id: nextId.current++, file, status: 'indexing', progress: 0 }));
-    setAttachmentNotice(unique.length > fresh.length ? `첨부파일은 최대 ${MAX_ATTACHMENTS}개까지 추가할 수 있습니다.` : '');
+    const { files, notice } = prepareAttachments(attachedFiles, incoming);
+    const fresh: FileEntry[] = files.map(entry => ({ ...entry, id: nextId.current++ }));
+    setAttachmentNotice(notice);
     setAttachedFiles(prev => [...prev, ...fresh]);
     e.target.value = '';
   };
@@ -218,10 +187,11 @@ export default function HomeView({
 
   const doSubmit = () => {
     if (!value.trim() && attachedFiles.length === 0) return;
-    const attachments = attachedFiles.map(({ file }) => ({
+    const attachments = attachedFiles.map(({ file, role }) => ({
       name: file.name,
       size: file.size,
       type: file.type,
+      role,
     }));
     if (selectedAssistant) {
       onStartWithAssistant?.(
@@ -331,64 +301,31 @@ export default function HomeView({
             {/* 첨부 파일 칩 */}
             {attachedFiles.length > 0 && (
               <>
-              <div className="flex min-w-0 flex-col gap-1 px-4 pt-3 pb-1 sm:hidden">
-                {attachedFiles.map(entry => (
-                  <div key={entry.id} className="flex min-w-0 items-center gap-2 rounded-lg bg-[#F4F3FC] px-2.5 py-1.5">
-                    <span className="min-w-0 flex-1 truncate text-[12px] text-[#6B6882]" title={entry.file.name}>{entry.file.name}</span>
-                    <button type="button" onClick={() => removeFile(entry.id)}
-                      className="flex h-5 w-5 shrink-0 items-center justify-center rounded text-[#8A87A3] hover:text-[#4F46E5]"
-                      aria-label={`${entry.file.name} 첨부 제거`}>
-                      <X className="h-3.5 w-3.5" strokeWidth={2} />
-                    </button>
-                  </div>
-                ))}
-              </div>
-              <div className="hidden flex-wrap gap-2 px-4 pt-3 pb-1 sm:flex">
+              {templateCount > 0 && (
+                <div className="flex items-start gap-2 rounded-t-2xl border-b border-amber-200 bg-amber-50 px-4 py-2.5 text-[12px] font-medium text-amber-800" role="status">
+                  <FileText className="mt-0.5 h-3.5 w-3.5 shrink-0" />
+                  서식 1개 지정 — 출력의 구조·목차·문체 참조용이며, 내용 인용 대상에서 제외합니다.
+                </div>
+              )}
+              <div className="flex flex-wrap gap-2 px-4 pt-3 pb-1">
                 {attachedFiles.map(entry => {
-                  const { bg, text } = fileAccent(entry.file.name);
-                  const ext = entry.file.name.split('.').pop()?.toUpperCase() ?? 'FILE';
-                  const isDone = entry.status === 'done';
+                  const isTemplate = entry.role === 'template';
+                  const templateUnavailable = !isTemplate && templateCount > 0;
                   return (
-                    <div key={entry.id}
-                      className="relative flex flex-col gap-1 pl-2.5 pr-1.5 pt-1.5 pb-1 rounded-lg border overflow-hidden transition-all group/chip"
-                      style={{ borderColor: isDone ? `${text}33` : `${text}55`, background: bg, minWidth: 140, maxWidth: 200 }}>
-                      <div className="flex items-center gap-2">
-                        <span className="text-[10px] font-black tracking-wide leading-none px-1.5 py-0.5 rounded-md shrink-0"
-                          style={{ background: text, color: '#fff' }}>{ext}</span>
-                        <div className="flex-1 min-w-0">
-                          <p className="text-[12px] font-semibold leading-tight truncate" style={{ color: text }}>{entry.file.name}</p>
-                          <p className="text-[10px] leading-tight" style={{ color: `${text}99` }}>{fmtSize(entry.file.size)}</p>
-                        </div>
-                        {isDone ? (
-                          <button type="button" onClick={() => removeFile(entry.id)}
-                            className="w-4 h-4 rounded-full flex items-center justify-center shrink-0 opacity-40 group-hover/chip:opacity-100 transition-opacity"
-                            style={{ background: `${text}22` }}>
-                            <svg width="10" height="10" viewBox="0 0 10 10" fill="none">
-                              <path d="M2 2l6 6M8 2L2 8" stroke={text} strokeWidth="1.8" strokeLinecap="round"/>
-                            </svg>
-                          </button>
-                        ) : (
-                          <div className="w-4 h-4 rounded-full flex items-center justify-center shrink-0"
-                            style={{ background: `${text}15` }}>
-                            <svg className="animate-spin" width="10" height="10" viewBox="0 0 10 10" fill="none">
-                              <circle cx="5" cy="5" r="3.5" stroke={`${text}33`} strokeWidth="2"/>
-                              <path d="M5 1.5A3.5 3.5 0 0 1 8.5 5" stroke={text} strokeWidth="2" strokeLinecap="round"/>
-                            </svg>
-                          </div>
-                        )}
-                      </div>
-                      <div className="h-[3px] rounded-full overflow-hidden" style={{ background: `${text}18` }}>
-                        <div className="h-full rounded-full transition-all duration-75"
-                          style={{
-                            width: `${entry.progress}%`,
-                            background: isDone
-                              ? `linear-gradient(90deg, ${text}aa, ${text})`
-                              : `linear-gradient(90deg, ${text}66, ${text})`,
-                          }} />
-                      </div>
-                      <p className="text-[8.5px] font-semibold leading-none" style={{ color: `${text}88` }}>
-                        {isDone ? '✓ 임베딩 완료' : `벡터 인덱싱 중… ${entry.progress}%`}
-                      </p>
+                    <div key={entry.id} className={`flex w-full min-w-0 items-center gap-2 rounded-xl border px-3 py-2 sm:w-auto sm:max-w-[360px] ${isTemplate ? 'border-amber-500 bg-amber-50 text-amber-800' : 'border-[#E4E2F0] bg-white text-[#1A1826]'}`}>
+                      <FileText className={`h-4 w-4 shrink-0 ${isTemplate ? 'text-amber-700' : 'text-[#8A87A3]'}`} />
+                      <span className="min-w-0 flex-1 truncate text-[12px] font-semibold" title={`${entry.file.name} · ${fmtSize(entry.file.size)}`}>{entry.file.name}</span>
+                      <select aria-label={`${entry.file.name} 첨부 역할`} value={entry.role}
+                        onChange={e => changeFileRole(entry.id, e.target.value as AttachmentRole)}
+                        className={`max-w-[85px] shrink-0 cursor-pointer rounded-md px-1.5 py-1 text-[11px] font-semibold outline-none focus:ring-2 focus:ring-[#4F46E5] ${isTemplate ? 'bg-amber-700 text-white' : 'bg-[#EEEEFF] text-[#4F46E5]'}`}>
+                        <option value="knowledge" disabled={isTemplate && knowledgeCount >= MAX_KNOWLEDGE_ATTACHMENTS}>지식{isTemplate && knowledgeCount >= MAX_KNOWLEDGE_ATTACHMENTS ? ' (10개 제한)' : ''}</option>
+                        <option value="template" disabled={templateUnavailable}>서식{templateUnavailable ? ' (1개 제한)' : ''}</option>
+                      </select>
+                      <button type="button" onClick={() => removeFile(entry.id)}
+                        className="flex h-6 w-6 shrink-0 items-center justify-center rounded-md opacity-60 hover:bg-black/5 hover:opacity-100"
+                        aria-label={`${entry.file.name} 첨부 제거`}>
+                        <X className="h-3.5 w-3.5" strokeWidth={2} />
+                      </button>
                     </div>
                   );
                 })}
@@ -405,7 +342,7 @@ export default function HomeView({
                 if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); doSubmit(); }
               }}
               className="w-full px-5 pt-4 pb-2 bg-transparent border-none outline-none text-[#1A1826] placeholder:text-[#A8A6C0] resize-none text-base leading-relaxed"
-              placeholder="작업을 설명하거나, 질문하거나, 파일을 첨부하세요..."
+              placeholder={'내부 지침 및 매뉴얼에서 자료를 찾고 싶으신가요? 질문을 입력해주세요.\n아래 비서를 선택하시면, 비서와 대화할 수 있습니다.'}
               rows={3} aria-label="메시지 입력"
             />
             <div className="flex items-center justify-between px-4 pb-3">
@@ -418,7 +355,7 @@ export default function HomeView({
                   onChange={handleFileChange}
                   style={{ display: 'none' }}
                 />
-                <Tooltip label="파일 첨부">
+                <Tooltip label={ATTACHMENT_LIMIT_NOTICE}>
                   <label
                     htmlFor="home-file-attach"
                     className={`cursor-pointer p-1.5 rounded-lg transition-colors flex items-center justify-center ${
@@ -430,7 +367,7 @@ export default function HomeView({
                   </label>
                 </Tooltip>
                 {attachedFiles.length > 0 && (
-                  <span className="text-[11px] font-semibold text-[#4F46E5] ml-0.5">{attachedFiles.length}</span>
+                  <span className="text-[11px] font-semibold text-[#4F46E5] ml-0.5">지식 {knowledgeCount} · 서식 {templateCount}</span>
                 )}
 
                 {/* 비서 선택 */}
