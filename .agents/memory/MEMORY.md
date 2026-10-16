@@ -1,3 +1,5 @@
 - [GitHub publishing](github-publishing.md) — use the authenticated GitHub integration API when shell HTTPS push lacks credentials; throttle blob uploads below the proxy rate limit.
 - [Managed preview port conflicts](preview-port-conflicts.md) — a failed artifact workflow may coexist with an older serving process; inspect listeners before changing app code.
 - [첨부파일 역할](attachment-roles.md) — 대화 첨부파일은 지식·서식으로 구분하며 서식은 한 파일만 지정한다.
+- [평가 점수 합산](evaluation-scoring.md) — 비서 평가는 긍정·부정 점수의 합계이며 음수와 상쇄된 0점을 허용한다.
+- [내 비서 분석 화면](assistant-details.md) — ‘내가 만든 모든 비서’ 카드는 ‘분석’ 버튼으로 공통 비서 상세 모달을 연다.

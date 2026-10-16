@@ -82,7 +82,7 @@ function ShortcutCard({ label, desc, icon: Icon, color, bg, colored, onClick }: 
       onClick={onClick}
       onMouseEnter={() => setHovered(true)}
       onMouseLeave={() => setHovered(false)}
-      className="relative flex flex-col items-center text-center px-3 pt-4 pb-3 rounded-xl border transition-all duration-200"
+      className="relative flex w-full flex-col items-center text-center px-3 pt-4 pb-3 rounded-xl border transition-all duration-200"
       style={{
         backgroundColor: hovered
           ? (isDark ? `${color}22` : bg)
@@ -268,7 +268,7 @@ export default function HomeView({
       </div>
 
       {/* Content */}
-      <div className="flex-1 flex flex-col items-center justify-center px-4 md:px-10 pb-6 overflow-y-auto" style={{ scrollbarWidth: 'none' }}>
+      <div className="flex-1 flex flex-col items-center justify-center px-4 md:px-6 pb-6 overflow-y-auto" style={{ scrollbarWidth: 'none' }}>
 
         {/* Hero */}
         <div className="text-center mb-7">
@@ -296,7 +296,7 @@ export default function HomeView({
         </button>
 
         {/* Input */}
-        <div className="w-full max-w-2xl mb-6">
+        <div className="w-full max-w-[960px] mb-6">
           <div className="bg-white rounded-2xl border border-[#E4E2F0] shadow-sm hover:border-[#C7C3F7] focus-within:border-[#4F46E5] focus-within:shadow-[0_0_0_3px_rgba(79,70,229,0.08)] transition-all">
             {/* 첨부 파일 칩 */}
             {attachedFiles.length > 0 && (
@@ -415,7 +415,7 @@ export default function HomeView({
 
 
         {/* 비서 탭 */}
-        <div className="w-full max-w-2xl mt-8">
+        <div className="w-full max-w-[960px] mt-8">
           {/* 탭 헤더 */}
           <div className="flex items-center gap-1 mb-4 bg-[#F4F3FC] rounded-xl p-1">
             {([ 

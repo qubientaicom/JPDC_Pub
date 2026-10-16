@@ -156,6 +156,7 @@ interface MyAssistantComment { author: string; text: string; ts: string; }
 interface MyAssistantStats {
   dialogueCount: number; messageCount: number; category?: string;
   rating?: number; ratingCount?: number;
+  ratingDistribution?: AssistantDetail['ratingDistribution'];
   likes?: number; dislikes?: number;
   comments: MyAssistantComment[];
 }
@@ -234,121 +235,32 @@ const SCOPE_STYLE: Record<string, { color: string; bg: string; border: string }>
   '전사':   { color: '#4F46E5', bg: '#EEF0FF', border: '#C7C3F7' },
 };
 
-/* ─── 통계 모달 ─── */
-function AssistantStatsModal({ assistant, onClose }: {
-  assistant: MyAssistant;
-  onClose: () => void;
-}) {
-  const [showComments, setShowComments] = useState(true);
-  const stats = assistant.stats;
-
-  const fmt = (ts: string) => {
-    const d = new Date(ts);
-    return `${d.getFullYear()}.${String(d.getMonth()+1).padStart(2,'0')}.${String(d.getDate()).padStart(2,'0')}`;
+/* ─── 내가 만든 비서 → 공통 상세 모달 데이터 ─── */
+function myAssistantToDetail(a: MyAssistant): AssistantDetail {
+  const statuses: Record<AssistantStatusBadge, AssistantDetail['status']> = {
+    '공식': 'official', '승인완료': 'approved', '승인 대기': 'pending',
+    '버전 갱신중': 'updating', '임시저장': 'draft', '승인불가': 'rejected',
   };
-
-  return (
-    <div className="fixed inset-0 z-[200] flex items-center justify-center p-4"
-      onClick={onClose}>
-      <div className="absolute inset-0 bg-black/30 backdrop-blur-[2px]" />
-      <div className="relative z-10 w-full max-w-[520px] bg-white rounded-2xl shadow-2xl overflow-hidden"
-        onClick={(e) => e.stopPropagation()}>
-
-        {/* 헤더 */}
-        <div className="px-6 pt-6 pb-4">
-          <div className="flex items-start justify-between gap-3">
-            <div className="min-w-0">
-              <p className="text-[18px] font-bold text-[#1A1826] leading-snug">{assistant.name}</p>
-              <p className="text-[13px] text-[#6B6882] mt-1 leading-relaxed">{assistant.desc}</p>
-            </div>
-            <button type="button" onClick={onClose}
-              className="shrink-0 p-1.5 rounded-lg text-[#A8A6C0] hover:text-[#1A1826] hover:bg-[#F4F3FC] transition-colors">
-              <XIcon className="w-4 h-4" strokeWidth={2} />
-            </button>
-          </div>
-        </div>
-
-        {/* 구분선 */}
-        <div className="border-t border-[#E4E2F0]" />
-
-        {/* 통계 행 */}
-        <div className="px-6 py-5 grid grid-cols-6 divide-x divide-[#E4E2F0]">
-          {[
-            {
-              top: stats?.rating != null
-                ? <span className="flex items-center gap-1"><Star className="w-4 h-4 fill-[#F59E0B] text-[#F59E0B]" strokeWidth={0} />{stats.rating.toFixed(1)}</span>
-                : <span className="flex items-center gap-1"><Star className="w-4 h-4 fill-[#D1D0E0] text-[#D1D0E0]" strokeWidth={0} />-</span>,
-              label: `평가 (${stats?.ratingCount ?? 0})`,
-            },
-            {
-              top: <span className="flex items-center gap-0.5 text-[#4F46E5]">👍 {stats?.likes ?? 0}</span>,
-              label: '좋아요',
-            },
-            {
-              top: <span className="flex items-center gap-0.5 text-[#DC2626]">👎 {stats?.dislikes ?? 0}</span>,
-              label: '싫어요',
-            },
-            { top: stats?.dialogueCount ?? 0, label: '대화수' },
-            { top: stats?.messageCount ?? 0, label: '메시지수' },
-            { top: stats?.comments.length ?? 0, label: '코멘트수' },
-          ].map((s, i) => (
-            <div key={i} className="flex flex-col items-center gap-1 px-2">
-              <span className="text-[16px] font-bold text-[#1A1826] leading-none">{s.top}</span>
-              <span className="text-[12px] text-[#A8A6C0]">{s.label}</span>
-            </div>
-          ))}
-        </div>
-
-        {/* 구분선 */}
-        <div className="border-t border-[#E4E2F0]" />
-
-        {/* 코멘트 영역 */}
-        {showComments && (
-          <div className="px-6 py-5 max-h-[280px] overflow-y-auto" style={{ scrollbarWidth: 'none' }}>
-            <p className="text-[15px] font-bold text-[#1A1826] mb-4">코멘트</p>
-            {!stats || stats.comments.length === 0 ? (
-              <p className="text-[14px] text-[#A8A6C0]">아직 코멘트가 없습니다.</p>
-            ) : (
-              <div className="flex flex-col gap-3">
-                {stats.comments.map((c, i) => (
-                  <div key={i} className="border border-[#E4E2F0] rounded-xl px-4 py-3">
-                    <div className="flex items-center justify-between mb-1.5">
-                      <span className="text-[13px] font-semibold text-[#1A1826]">{c.author}</span>
-                      <span className="text-[12px] text-[#A8A6C0]">{fmt(c.ts)}</span>
-                    </div>
-                    <p className="text-[13px] text-[#6B6882] leading-relaxed">{c.text}</p>
-                  </div>
-                ))}
-              </div>
-            )}
-          </div>
-        )}
-
-        {/* 하단 버튼 */}
-        <div className="px-6 py-4 border-t border-[#E4E2F0] flex justify-end gap-2">
-          <button type="button" onClick={() => setShowComments(v => !v)}
-            className="px-4 py-2 rounded-xl border border-[#E4E2F0] text-[13px] font-semibold text-[#6B6882] hover:border-[#C7C3F7] hover:text-[#4F46E5] transition-colors">
-            {showComments ? '코멘트 숨기기' : '코멘트 보기'}
-          </button>
-          <button type="button" onClick={onClose}
-            className="px-4 py-2 rounded-xl border border-[#E4E2F0] text-[13px] font-semibold text-[#6B6882] hover:border-[#C7C3F7] hover:text-[#4F46E5] transition-colors">
-            닫기
-          </button>
-        </div>
-      </div>
-    </div>
-  );
+  return {
+    ...a.stats,
+    name: a.name, desc: a.desc, icon: a.icon, author: a.author,
+    version: a.version,
+    category: a.stats?.category ?? '미분류',
+    users: '—',
+    status: a.isDraft ? 'draft' : a.statusBadge ? statuses[a.statusBadge] : 'private',
+    scope: a.scope,
+  };
 }
 
 /* ─── 공통 비서 리스트 카드 ─── */
 function AssistantListCard({
   name, desc, icon: Icon, author, version, statusBadge, scope,
-  commentCount, createdAt, updatedAt, isDraft, isTestCard, onStats, onEdit, onClone, onContinue, isHighlighted,
+  commentCount, createdAt, updatedAt, isDraft, isTestCard, onAnalyze, onEdit, onClone, onContinue, isHighlighted,
 }: {
   name: string; desc: string; icon: LucideIcon; author: string;
   version?: string; statusBadge?: string; scope: string;
   commentCount?: number; createdAt: string; updatedAt: string;
-  isDraft?: boolean; isTestCard?: boolean; onStats?: () => void; onEdit?: () => void; onClone?: () => void; onContinue?: () => void; isHighlighted?: boolean;
+  isDraft?: boolean; isTestCard?: boolean; onAnalyze?: () => void; onEdit?: () => void; onClone?: () => void; onContinue?: () => void; isHighlighted?: boolean;
 }) {
   const [lit, setLit] = useState(!!isHighlighted);
   useEffect(() => {
@@ -455,10 +367,6 @@ function AssistantListCard({
               className="px-3 py-1.5 rounded-lg border border-[#E4E2F0] text-[#6B6882] hover:border-[#4F46E5]/30 hover:text-[#4F46E5] text-[12px] font-semibold transition-colors">
               복제
             </button>
-            <button type="button" onClick={onStats}
-              className="px-3 py-1.5 rounded-lg border border-[#E4E2F0] text-[#6B6882] hover:border-[#4F46E5]/30 hover:text-[#4F46E5] text-[12px] font-semibold transition-colors">
-              통계
-            </button>
             {canCopyUrl && (
               <button type="button"
                 className="px-3 py-1.5 rounded-lg border border-[#E4E2F0] text-[#6B6882] hover:border-[#4F46E5]/30 hover:text-[#4F46E5] text-[12px] font-semibold transition-colors">
@@ -472,6 +380,12 @@ function AssistantListCard({
               </button>
             )}
           </>
+        )}
+        {!isTestCard && (
+          <button type="button" onClick={onAnalyze}
+            className="px-3 py-1.5 rounded-lg border border-[#E4E2F0] text-[#6B6882] hover:border-[#4F46E5]/30 hover:text-[#4F46E5] text-[12px] font-semibold transition-colors">
+            분석
+          </button>
         )}
       </div>
     </div>
@@ -687,13 +601,13 @@ const RECOMMENDED_HELP = (
 );
 
 /* ─── 탭 1: 내가 만든 모든 비서 ─── */
-function MyAssistantsTab({ onEdit, list, setList, onOpenBuilder }: {
+function MyAssistantsTab({ onEdit, list, setList, onOpenBuilder, onAnalyze }: {
   onEdit: (a: MyAssistant) => void;
   list: MyAssistant[];
   setList: React.Dispatch<React.SetStateAction<MyAssistant[]>>;
   onOpenBuilder: () => void;
+  onAnalyze: (a: MyAssistant) => void;
 }) {
-  const [statsTarget, setStatsTarget] = useState<MyAssistant | null>(null);
 
   const handleClone = (index: number) => {
     const source = list[index];
@@ -790,7 +704,7 @@ function MyAssistantsTab({ onEdit, list, setList, onOpenBuilder }: {
             {list.map((a, i) => (
               <AssistantListCard key={`${a.name}-${i}`} {...a}
                 isHighlighted={!!a._isNew}
-                onStats={() => setStatsTarget(a)}
+                onAnalyze={() => onAnalyze(a)}
                 onEdit={() => onEdit(a)}
                 onClone={() => handleClone(i)}
                 onContinue={() => onEdit(a)} />
@@ -799,12 +713,6 @@ function MyAssistantsTab({ onEdit, list, setList, onOpenBuilder }: {
         )}
       </div>
 
-      {statsTarget && (
-        <AssistantStatsModal
-          assistant={statsTarget}
-          onClose={() => setStatsTarget(null)}
-        />
-      )}
     </>
   );
 }
@@ -1382,7 +1290,7 @@ export default function MarketView({ savedItems, savedPanelOpen, onToggleSavedPa
       </div>
 
       {/* ── 탭 콘텐츠 ── */}
-      {activeTab === 'my'       && <MyAssistantsTab onEdit={handleEditAssistant} list={myList} setList={setMyList} onOpenBuilder={() => { setActiveTab('my'); setShowBuilder(true); }} />}
+      {activeTab === 'my'       && <MyAssistantsTab onEdit={handleEditAssistant} list={myList} setList={setMyList} onAnalyze={a => setSelectedAssistant(myAssistantToDetail(a))} onOpenBuilder={() => { setActiveTab('my'); setShowBuilder(true); }} />}
       {activeTab === 'test'     && <TestRequestTab />}
       {activeTab === 'official' && <OfficialTab onOpenGallery={() => handleTabChange('gallery')} onAssistantClick={handleAssistantClick} favorites={favorites} onToggleFavorite={onToggleFavorite} />}
       {activeTab === 'gallery'  && <GalleryView onBack={() => handleTabChange('official')} onAssistantClick={handleAssistantClick} favorites={favorites} onToggleFavorite={onToggleFavorite} />}

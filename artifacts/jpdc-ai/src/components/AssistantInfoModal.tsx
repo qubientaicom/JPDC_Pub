@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { X, Star, MessageSquare, BarChart2, Users, ChevronRight, Lock, Copy, CopyCheck, Layers, type LucideIcon } from 'lucide-react';
 import Tooltip from './Tooltip';
+import { RATING_LEVELS, summarizeRatings, type RatingDistribution } from '../lib/ratings';
 
 /* ── 타입 ── */
 export interface AssistantDetail {
@@ -13,17 +14,17 @@ export interface AssistantDetail {
   isNew?: boolean;
   author?: string;
   version?: string;
-  /** 'official' = 승인완료, 'pending' = 승인 대기, 'updating' = 버전 갱신중 */
-  status?: 'official' | 'pending' | 'updating';
+  status?: 'official' | 'approved' | 'pending' | 'updating' | 'draft' | 'private' | 'rejected';
+  scope?: string;
   rating?: number;
   ratingCount?: number;
-  ratingDistribution?: { 5: number; 4: number; 3: number; 2: number; 1: number };
+  ratingDistribution?: RatingDistribution;
   dialogueCount?: number;
   messageCount?: number;
   likes?: number;
   dislikes?: number;
   starters?: string[];
-  comments?: { text: string; ts: string }[];
+  comments?: { text: string; ts: string; author?: string }[];
   othersByAuthor?: { name: string; desc: string; icon: LucideIcon }[];
 }
 
@@ -57,15 +58,19 @@ function fmt(n: number) {
 }
 
 /* ── 배지 ── */
-function Badge({ status, isNew }: { status?: AssistantDetail['status']; isNew?: boolean }) {
+function Badge({ status, isNew, version, scope }: { status?: AssistantDetail['status']; isNew?: boolean; version?: string; scope?: string }) {
   const chips: { label: string; bg: string; text: string }[] = [];
 
-  chips.push({ label: 'v1', bg: '#F0EEFF', text: '#4F46E5' });
+  chips.push({ label: version ?? 'v1', bg: '#F0EEFF', text: '#4F46E5' });
 
   if (status === 'official')  chips.push({ label: '공식',       bg: '#DCFCE7', text: '#16A34A' });
   if (status === 'official')  chips.push({ label: '승인완료',   bg: '#DCFCE7', text: '#16A34A' });
+  if (status === 'approved')  chips.push({ label: '승인완료',   bg: '#DCFCE7', text: '#16A34A' });
   if (status === 'updating')  chips.push({ label: '버전 갱신중', bg: '#FEF3C7', text: '#D97706' });
   if (status === 'pending')   chips.push({ label: '승인 대기',   bg: '#FEE2E2', text: '#DC2626' });
+  if (status === 'draft')     chips.push({ label: '임시저장',    bg: '#FEF3C7', text: '#D97706' });
+  if (status === 'rejected')  chips.push({ label: '승인불가',    bg: '#FEE2E2', text: '#DC2626' });
+  if (scope)                 chips.push({ label: scope,        bg: '#F0EEFF', text: '#4F46E5' });
   if (isNew)                  chips.push({ label: 'NEW',         bg: '#FEF9C3', text: '#D4930A' });
 
   return (
@@ -81,27 +86,29 @@ function Badge({ status, isNew }: { status?: AssistantDetail['status']; isNew?: 
   );
 }
 
-/* ── 별점 막대 ── */
+/* ── 양수·음수 점수별 평가 막대 ── */
 function RatingBars({ dist, count }: { dist: AssistantDetail['ratingDistribution']; count: number }) {
   if (!dist || count === 0) {
     return (
       <p className="text-[13px] text-[#A8A6C0] py-2">아직 평가가 없습니다.</p>
     );
   }
-  const total = Object.values(dist).reduce((a, b) => a + b, 0);
+  const total = summarizeRatings(dist).count;
   return (
     <div className="flex flex-col gap-1.5">
-      {([5, 4, 3, 2, 1] as const).map((star) => {
-        const pct = total > 0 ? (dist[star] / total) * 100 : 0;
+      {RATING_LEVELS.map((star) => {
+        const votes = dist[star] ?? 0;
+        const pct = total > 0 ? (votes / total) * 100 : 0;
+        const color = star > 0 ? '#10B981' : '#EF4444';
         return (
           <div key={star} className="flex items-center gap-2">
-            <span className="text-[12px] text-[#6B6882] w-4 text-right shrink-0">{star}</span>
-            <Star className="w-3 h-3 text-[#F59E0B] shrink-0" fill="#F59E0B" strokeWidth={0} />
+            <span className="text-[12px] w-5 text-right shrink-0" style={{ color }}>{star > 0 ? `+${star}` : star}</span>
+            <Star className="w-3 h-3 shrink-0" style={{ color }} fill={color} strokeWidth={0} />
             <div className="flex-1 h-1.5 rounded-full bg-[#F4F3FC] overflow-hidden">
-              <div className="h-full rounded-full bg-[#F59E0B] transition-all duration-500"
-                style={{ width: `${pct}%` }} />
+              <div className="h-full rounded-full transition-all duration-500"
+                style={{ width: `${pct}%`, background: color }} />
             </div>
-            <span className="text-[11px] text-[#A8A6C0] w-5 text-left shrink-0">{dist[star]}</span>
+            <span className="text-[11px] text-[#A8A6C0] w-8 text-left shrink-0">{votes}</span>
           </div>
         );
       })}
@@ -112,10 +119,14 @@ function RatingBars({ dist, count }: { dist: AssistantDetail['ratingDistribution
 /* ── 메인 모달 ── */
 export default function AssistantInfoModal({ assistant: a, onClose, onSelectOther, onStartChat, onClone }: Props) {
   const c = getCatColor(a.category);
-  const isLocked = a.status === 'pending' || a.status === 'updating';
-  const ratingStr = a.rating && a.ratingCount && a.ratingCount > 0
-    ? a.rating.toFixed(1)
-    : '-';
+  const lockMessage = a.status === 'pending' ? '승인 대기 중'
+    : a.status === 'updating' ? '버전 갱신중'
+    : a.status === 'draft' ? '임시저장 중'
+    : a.status === 'rejected' ? '승인불가' : null;
+  const isLocked = lockMessage !== null;
+  const ratingSummary = summarizeRatings(a.ratingDistribution);
+  const ratingStr = ratingSummary.count > 0 ? String(ratingSummary.total) : '-';
+  const ratingColor = ratingSummary.total < 0 ? '#EF4444' : ratingSummary.total > 0 ? '#10B981' : '#6B6882';
   const [copied, setCopied] = useState(false);
   const [cloned, setCloned] = useState(false);
 
@@ -191,7 +202,7 @@ export default function AssistantInfoModal({ assistant: a, onClose, onSelectOthe
             </p>
 
             {/* 배지 */}
-            <Badge status={a.status ?? 'official'} isNew={a.isNew} />
+            <Badge status={a.status ?? 'official'} isNew={a.isNew} version={a.version} scope={a.scope} />
           </div>
 
           {/* ── 설명 ── */}
@@ -205,8 +216,8 @@ export default function AssistantInfoModal({ assistant: a, onClose, onSelectOthe
           <div className="mx-6 mb-5 grid grid-cols-6 divide-x divide-[#E4E2F0] border border-[#E4E2F0] rounded-xl overflow-hidden">
             {([
               {
-                label: `평가 (${a.ratingCount ?? 0})`,
-                value: <span className="flex items-center gap-1"><Star className="w-4 h-4 fill-[#F59E0B] text-[#F59E0B]" strokeWidth={0} />{ratingStr}</span>,
+                label: `평가 (${ratingSummary.count})`,
+                value: <span className="flex items-center gap-1" style={{ color: ratingColor }}><Star className="w-4 h-4" fill={ratingColor} strokeWidth={0} />{ratingStr}</span>,
               },
               { label: '좋아요', value: <span className="text-[#4F46E5]">👍 {a.likes ?? 0}</span> },
               { label: '싫어요', value: <span className="text-[#DC2626]">👎 {a.dislikes ?? 0}</span> },
@@ -245,23 +256,20 @@ export default function AssistantInfoModal({ assistant: a, onClose, onSelectOthe
           {/* ── 평가 ── */}
           <div className="px-6 mb-5">
             <h3 className="text-[13px] font-bold text-[#1A1826] mb-2.5">평가</h3>
-            {a.rating && a.ratingCount && a.ratingCount > 0 ? (
-              <div className="flex items-start gap-5">
+            {ratingSummary.count > 0 ? (
+              <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:gap-5">
                 {/* 왼쪽: 총점 */}
                 <div className="flex flex-col items-center gap-0.5 shrink-0">
-                  <span className="text-[33px] font-black text-[#1A1826] leading-none">{a.rating.toFixed(1)}</span>
-                  <div className="flex items-center gap-0.5">
-                    {[1,2,3,4,5].map((i) => (
-                      <Star key={i} style={{ width: 10, height: 10 }}
-                        fill={i <= Math.round(a.rating!) ? '#F59E0B' : '#E4E2F0'}
-                        stroke="none" />
-                    ))}
-                  </div>
-                  <span className="text-[11px] text-[#A8A6C0] mt-0.5">{a.ratingCount}개 평가</span>
+                  <span className="text-[11px] font-semibold text-[#6B6882] mb-1">합산 점수</span>
+                  <span className="text-[33px] font-black leading-none" style={{ color: ratingColor }}>{ratingSummary.total}</span>
+                  <span className="text-[11px] text-[#A8A6C0] mt-0.5">{ratingSummary.count}개 평가</span>
+                  <span className="text-[11px] text-emerald-600 mt-2">좋아요 +{ratingSummary.positiveScore}점</span>
+                  <span className="text-[11px] text-red-500">싫어요 {ratingSummary.negativeScore}점</span>
                 </div>
                 {/* 오른쪽: 막대 */}
-                <div className="flex-1">
-                  <RatingBars dist={a.ratingDistribution} count={a.ratingCount ?? 0} />
+                <div className="w-full flex-1">
+                  <p className="text-[11px] text-[#6B6882] mb-2">점수별 평가 건수 · 좋아요 점수 + 싫어요 점수</p>
+                  <RatingBars dist={a.ratingDistribution} count={ratingSummary.count} />
                 </div>
               </div>
             ) : (
@@ -276,6 +284,7 @@ export default function AssistantInfoModal({ assistant: a, onClose, onSelectOthe
               <div className="flex flex-col gap-2">
                 {a.comments.slice().sort((x, y) => y.ts.localeCompare(x.ts)).map((cm) => (
                   <div key={cm.ts} className="px-3.5 py-2.5 rounded-xl bg-[#F9F8FF] border border-[#E4E2F0]">
+                    {cm.author && <p className="text-[12px] font-semibold text-[#6B6882] mb-1">{cm.author}</p>}
                     <p className="text-[13px] text-[#1A1826] leading-snug mb-1">{cm.text}</p>
                     <p className="text-[11px] text-[#A8A6C0]">{new Date(cm.ts).toLocaleString('ko-KR')}</p>
                   </div>
@@ -316,12 +325,12 @@ export default function AssistantInfoModal({ assistant: a, onClose, onSelectOthe
         <div className="px-6 py-4 border-t border-[#E4E2F0] bg-white shrink-0 space-y-2">
           {/* 채팅 시작 */}
           {isLocked ? (
-            <Tooltip label={a.status === 'pending' ? '승인 대기 중인 비서는 채팅을 시작할 수 없습니다' : '버전 갱신 중입니다. 잠시 후 다시 시도해 주세요'} position="top">
+            <Tooltip label={`${lockMessage} 상태의 비서는 채팅을 시작할 수 없습니다`} position="top">
               <button type="button" disabled
                 className="w-full flex items-center justify-center gap-2 py-3 rounded-xl
                            bg-[#F4F3FC] text-[#A8A6C0] text-base font-semibold cursor-not-allowed">
                 <Lock className="w-4 h-4" strokeWidth={1.8} />
-                {a.status === 'pending' ? '승인 대기 중' : '버전 갱신중'}
+                {lockMessage}
               </button>
             </Tooltip>
           ) : (

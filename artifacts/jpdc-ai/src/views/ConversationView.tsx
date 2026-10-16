@@ -2490,7 +2490,7 @@ function InputBar({
 
   return (
     <div className="shrink-0 px-6 py-4 border-t border-[#E4E2F0] bg-white">
-      <div className="max-w-[920px] mx-auto">
+      <div className="max-w-[960px] mx-auto">
         <div className="bg-white rounded-2xl border border-[#E4E2F0] shadow-sm hover:border-[#C7C3F7] focus-within:border-[#4F46E5] focus-within:shadow-[0_0_0_3px_rgba(79,70,229,0.08)] transition-all">
           {templateCount > 0 && (
             <div role="status" className="flex items-start gap-2 rounded-t-2xl border-b border-amber-200 bg-amber-50 px-4 py-2.5 text-[12px] font-medium text-amber-800">
@@ -3147,7 +3147,7 @@ export default function ConversationView({
 
       {/* Messages */}
       <div className="flex-1 overflow-y-auto px-6 py-6" style={{ scrollbarWidth: 'none' }}>
-        <div className="max-w-[920px] mx-auto space-y-6">
+        <div className="max-w-[960px] mx-auto space-y-6">
           {messages.map((msg, i) => {
             const renderMessage = () => {
             /* ── 사용자 메시지 ── */
