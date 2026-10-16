@@ -1432,7 +1432,7 @@ function ContinueQueryButton({ onClick }: { onClick: () => void }) {
       className="w-full flex items-center justify-center gap-1.5 px-3 py-2 rounded-xl border border-[#C7C3F7] bg-[#F9F8FF] text-[12px] font-semibold text-[#4F46E5] hover:bg-[#EEEEFF] hover:border-[#A9A3F0] transition-colors"
     >
       <MessageSquare className="w-3.5 h-3.5" strokeWidth={1.8} />
-      이어서 질의
+      이 답변 채택
       <ArrowRight className="w-3.5 h-3.5" strokeWidth={1.8} />
     </button>
   );
@@ -2423,6 +2423,7 @@ function InputBar({
   isAnswering = false,
   focusRequest = 0,
   awaitingFollowUp = false,
+  awaitingAnswerAdoption = false,
   activeAssistantName = null,
 }: {
   onSend: (text: string, assistantName?: string | null, attachments?: MessageAttachment[]) => void;
@@ -2430,6 +2431,7 @@ function InputBar({
   isAnswering?: boolean;
   focusRequest?: number;
   awaitingFollowUp?: boolean;
+  awaitingAnswerAdoption?: boolean;
   activeAssistantName?: string | null;
 }) {
   const [value, setValue] = useState('');
@@ -2479,6 +2481,18 @@ function InputBar({
   return (
     <div className="shrink-0 px-6 py-4 border-t border-[#E4E2F0] bg-white">
       <div className="max-w-[960px] mx-auto">
+        {awaitingAnswerAdoption && (
+          <div id="answer-adoption-notice" role="status"
+            className="answer-adoption-notice mb-3 flex items-start gap-3 rounded-xl border border-amber-300 border-l-4 border-l-amber-500 bg-amber-50 px-4 py-3 text-amber-950 shadow-sm">
+            <MessageSquare className="mt-0.5 h-5 w-5 shrink-0 text-amber-700" strokeWidth={2} aria-hidden="true" />
+            <div className="min-w-0">
+              <p className="text-[14px] font-bold">먼저 ‘이 답변 채택’을 선택해 주세요</p>
+              <p className="mt-1 text-[13px] leading-relaxed">
+                위 답변에서 선택하여 <strong>‘1개의 답변을 채택’</strong> 하지 않고 질문을 입력하시면 <strong>신규 질의로 판단될 수 있습니다.</strong>
+              </p>
+            </div>
+          </div>
+        )}
         <div className="bg-white rounded-2xl border border-[#E4E2F0] shadow-sm hover:border-[#C7C3F7] focus-within:border-[#4F46E5] focus-within:shadow-[0_0_0_3px_rgba(79,70,229,0.08)] transition-all">
           {templateCount > 0 && (
             <div role="status" className="flex items-start gap-2 rounded-t-2xl border-b border-amber-200 bg-amber-50 px-4 py-2.5 text-[12px] font-medium text-amber-800">
@@ -2527,8 +2541,11 @@ function InputBar({
 
           {/* 텍스트 입력 */}
           <textarea ref={textareaRef} value={value} onChange={e => setValue(e.target.value)} onKeyDown={handleKey}
+            aria-describedby={awaitingAnswerAdoption ? 'answer-adoption-notice' : undefined}
             className="w-full px-5 pt-4 pb-2 bg-transparent border-none outline-none text-[#1A1826] placeholder:text-[#A8A6C0] resize-none text-base leading-relaxed"
-            placeholder={awaitingFollowUp ? '궁금하신 것을 입력해주세요... (Enter 전송)' : '추가 질문을 입력하세요... (Enter 전송)'} rows={2} />
+            placeholder={awaitingAnswerAdoption
+              ? '위 답변을 채택하거나 새로운 질문을 입력하세요.'
+              : awaitingFollowUp ? '궁금하신 것을 입력해주세요... (Enter 전송)' : '추가 질문을 입력하세요... (Enter 전송)'} rows={2} />
 
           {/* 툴바 */}
           <div className="flex items-center justify-between px-4 pb-3">
@@ -2807,6 +2824,12 @@ export default function ConversationView({
   const [activeAssistantName, setActiveAssistantName] = useState<string | null>(assistantContext?.name ?? null);
   const [followUpFocusRequest, setFollowUpFocusRequest] = useState(0);
   const [awaitingFollowUp, setAwaitingFollowUp] = useState(false);
+  const latestMessage = messages[messages.length - 1];
+  const awaitingAnswerAdoption = !awaitingFollowUp
+    && latestMessage?.role === 'assistant'
+    && (latestMessage.kind === 'rag-tag'
+      || latestMessage.kind === 'rag-tag-assistant'
+      || latestMessage.kind === 'dual-tag');
   const [pendingAssistant, setPendingAssistant] = useState<CandidateAssistant | null>(null);
   const [switchError, setSwitchError] = useState('');
   const bottomRef = useRef<HTMLDivElement>(null);
@@ -3504,6 +3527,7 @@ export default function ConversationView({
         isAnswering={activeStreamingIndex >= 0}
         focusRequest={followUpFocusRequest}
         awaitingFollowUp={awaitingFollowUp}
+        awaitingAnswerAdoption={awaitingAnswerAdoption}
         activeAssistantName={activeAssistantName}
       />
     </div>
