@@ -15,31 +15,28 @@ export const ATTACHMENT_LIMIT_NOTICE = '첨부파일은 총 11개까지 추가�
 export function prepareAttachments(
   existing: { file: File; role: AttachmentRole }[],
   incoming: File[],
+  role: AttachmentRole,
 ) {
   const names = new Set(existing.map(entry => `${entry.file.name}:${entry.file.size}`));
-  let knowledgeCount = existing.filter(entry => entry.role === 'knowledge').length;
-  let templateCount = existing.length - knowledgeCount;
+  let count = existing.filter(entry => entry.role === role).length;
+  const limit = role === 'knowledge' ? MAX_KNOWLEDGE_ATTACHMENTS : MAX_TEMPLATE_ATTACHMENTS;
   const files: { file: File; role: AttachmentRole }[] = [];
   let exceeded = false;
-  let assignedTemplate = false;
   for (const file of incoming) {
     const key = `${file.name}:${file.size}`;
     if (names.has(key)) continue;
     names.add(key);
-    if (knowledgeCount < MAX_KNOWLEDGE_ATTACHMENTS) {
-      files.push({ file, role: 'knowledge' });
-      knowledgeCount++;
-    } else if (templateCount < MAX_TEMPLATE_ATTACHMENTS) {
-      files.push({ file, role: 'template' });
-      templateCount++;
-      assignedTemplate = true;
+    if (count < limit) {
+      files.push({ file, role });
+      count++;
     } else {
       exceeded = true;
     }
   }
-  const notice = [
-    exceeded ? ATTACHMENT_LIMIT_NOTICE : '',
-    assignedTemplate ? '지식 10개 한도에 도달하여 추가 파일을 서식으로 지정했습니다.' : '',
-  ].filter(Boolean).join(' ');
+  const notice = exceeded
+    ? role === 'knowledge'
+      ? '지식은 최대 10개까지 첨부할 수 있습니다. 초과 파일은 추가하지 않았습니다.'
+      : '서식은 1개만 첨부할 수 있습니다. 다른 서식을 첨부하려면 기존 서식을 제거하세요.'
+    : '';
   return { files, notice };
 }

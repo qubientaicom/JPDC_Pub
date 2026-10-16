@@ -1,4 +1,5 @@
-import { MAX_ATTACHMENTS, MAX_KNOWLEDGE_ATTACHMENTS, ATTACHMENT_LIMIT_NOTICE, prepareAttachments, type AttachmentRole, type MessageAttachment } from '../types/conversation';
+import { MAX_ATTACHMENTS, prepareAttachments, type AttachmentRole, type MessageAttachment } from '../types/conversation';
+import AttachmentUploadButtons from '../components/AttachmentUploadButtons';
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import type { SavedItem } from '../components/SavedPanel';
 import Tooltip from '../components/Tooltip';
@@ -2434,7 +2435,6 @@ function InputBar({
   const [value, setValue] = useState('');
   const [attachedFiles, setAttachedFiles] = useState<FileEntry[]>([]);
   const [attachmentNotice, setAttachmentNotice] = useState('');
-  const fileInputRef = useRef<HTMLInputElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const nextId = useRef(0);
   useEffect(() => {
@@ -2445,15 +2445,6 @@ function InputBar({
 
   const templateCount = attachedFiles.filter(f => f.role === 'template').length;
   const knowledgeCount = attachedFiles.length - templateCount;
-
-  const changeFileRole = (id: number, role: AttachmentRole) => {
-    setAttachedFiles(prev => {
-      if (role === 'template' && prev.some(f => f.id !== id && f.role === 'template')) return prev;
-      if (role === 'knowledge' && prev.filter(f => f.id !== id && f.role === 'knowledge').length >= MAX_KNOWLEDGE_ATTACHMENTS) return prev;
-      return prev.map(f => f.id === id ? { ...f, role } : f);
-    });
-    setAttachmentNotice('');
-  };
 
   const doSend = () => {
     if (isAnswering) return;
@@ -2467,20 +2458,17 @@ function InputBar({
     setValue('');
     setAttachedFiles([]);
     setAttachmentNotice('');
-    if (fileInputRef.current) fileInputRef.current.value = '';
   };
   const handleKey = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
     if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); doSend(); }
   };
 
-  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const incoming = Array.from(e.target.files ?? []);
+  const handleFileSelect = (incoming: File[], role: AttachmentRole) => {
     if (!incoming.length) return;
-    const { files, notice } = prepareAttachments(attachedFiles, incoming);
+    const { files, notice } = prepareAttachments(attachedFiles, incoming, role);
     const fresh: FileEntry[] = files.map(entry => ({ ...entry, id: nextId.current++ }));
     setAttachmentNotice(notice);
     setAttachedFiles(prev => [...prev, ...fresh]);
-    e.target.value = '';
   };
 
   const removeFile = (id: number) => {
@@ -2516,17 +2504,13 @@ function InputBar({
               )}
               {attachedFiles.map(entry => {
                 const isTemplate = entry.role === 'template';
-                const templateUnavailable = !isTemplate && templateCount > 0;
                 return (
                   <div key={entry.id} className={`flex w-full min-w-0 items-center gap-2 rounded-xl border px-3 py-2 sm:w-auto sm:max-w-[360px] ${isTemplate ? 'border-amber-500 bg-amber-50 text-amber-800' : 'border-[#E4E2F0] bg-white text-[#1A1826]'}`}>
                     <FileText className={`h-4 w-4 shrink-0 ${isTemplate ? 'text-amber-700' : 'text-[#8A87A3]'}`} />
                     <span className="min-w-0 flex-1 truncate text-[12px] font-semibold" title={`${entry.file.name} · ${fmtSize(entry.file.size)}`}>{entry.file.name}</span>
-                    <select aria-label={`${entry.file.name} 첨부 역할`} value={entry.role}
-                      onChange={e => changeFileRole(entry.id, e.target.value as AttachmentRole)}
-                      className={`max-w-[85px] shrink-0 cursor-pointer rounded-md px-1.5 py-1 text-[11px] font-semibold outline-none focus:ring-2 focus:ring-[#4F46E5] ${isTemplate ? 'bg-amber-700 text-white' : 'bg-[#EEEEFF] text-[#4F46E5]'}`}>
-                      <option value="knowledge" disabled={isTemplate && knowledgeCount >= MAX_KNOWLEDGE_ATTACHMENTS}>지식{isTemplate && knowledgeCount >= MAX_KNOWLEDGE_ATTACHMENTS ? ' (10개 제한)' : ''}</option>
-                      <option value="template" disabled={templateUnavailable}>서식{templateUnavailable ? ' (1개 제한)' : ''}</option>
-                    </select>
+                    <span className={`shrink-0 rounded-md px-1.5 py-1 text-[11px] font-semibold ${isTemplate ? 'bg-amber-700 text-white' : 'bg-[#EEEEFF] text-[#4F46E5]'}`}>
+                      {isTemplate ? '서식' : '지식'}
+                    </span>
                     <button type="button" onClick={() => removeFile(entry.id)}
                       className="flex h-6 w-6 shrink-0 items-center justify-center rounded-md opacity-60 hover:bg-black/5 hover:opacity-100"
                       aria-label={`${entry.file.name} 첨부 제거`}>
@@ -2548,28 +2532,8 @@ function InputBar({
 
           {/* 툴바 */}
           <div className="flex items-center justify-between px-4 pb-3">
-            <div className="flex items-center gap-0.5">
-              {/* 파일 첨부 — input은 DOM에만 두고 label htmlFor로 연결 */}
-              <input
-                id="jpdc-file-attach"
-                ref={fileInputRef}
-                type="file"
-                multiple
-                onChange={handleFileChange}
-                style={{ display: 'none' }}
-              />
-              <Tooltip label={ATTACHMENT_LIMIT_NOTICE}>
-                <label
-                  htmlFor="jpdc-file-attach"
-                  className={`cursor-pointer p-1.5 rounded-lg transition-colors flex items-center justify-center ${
-                    attachedFiles.length > 0
-                      ? 'text-[#4F46E5] bg-[#EEEEFF]'
-                      : 'text-[#A8A6C0] hover:text-[#4F46E5] hover:bg-[#F4F3FC]'
-                  }`}
-                >
-                  <Paperclip className="w-[15px] h-[15px]" strokeWidth={1.8} />
-                </label>
-              </Tooltip>
+            <div className="flex min-w-0 flex-wrap items-center gap-1">
+              <AttachmentUploadButtons knowledgeCount={knowledgeCount} templateCount={templateCount} onSelect={handleFileSelect} />
               {attachedFiles.length > 0 && (
                 <span className="ml-1 text-[11px] font-medium text-[#6B6882]">지식 {knowledgeCount} · 서식 {templateCount}</span>
               )}
@@ -2597,7 +2561,7 @@ function InputBar({
         {attachedFiles.length > 0 && (
           <p className="mt-2 text-[11px] leading-relaxed text-[#6B6882]">
             <span className="font-semibold text-[#4F46E5]">지식</span> — 답변의 근거·인용 자료로 여러 개 지정할 수 있습니다.{' '}
-            <span className="font-semibold text-amber-700">서식</span> — 출력 형식 참조용으로 1개만 지정할 수 있습니다. 다른 서식을 선택하려면 기존 서식을 지식으로 변경하거나 제거하세요.
+            <span className="font-semibold text-amber-700">서식</span> — 출력 형식 참조용으로 1개만 첨부할 수 있습니다. 유형은 첨부 전에 선택하며, 변경하려면 제거 후 다시 첨부하세요.
           </p>
         )}
       </div>
