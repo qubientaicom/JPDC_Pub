@@ -8,6 +8,7 @@ import SettingsModal from './components/SettingsModal';
 import BriefingModal from './components/BriefingModal';
 import ManualModal from './components/ManualModal';
 import OnboardingModal from './components/OnboardingModal';
+import PocAnnouncementModal from './components/PocAnnouncementModal';
 import SavedPanel, { type SavedItem } from './components/SavedPanel';
 import NotifPanel, { INITIAL_UNREAD } from './components/NotifPanel';
 import type { MessageAttachment } from './types/conversation';
@@ -190,6 +191,7 @@ function App() {
         )}
         {manualOpen && <ManualModal onClose={() => setManualOpen(false)} />}
         {onboardingOpen && <OnboardingModal onClose={() => setOnboardingOpen(false)} />}
+        <PocAnnouncementModal />
       </div>
     </ThemeProvider>
   );
