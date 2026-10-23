@@ -173,12 +173,20 @@ export default function AssistantInfoModal({ assistant: a, onClose, onSelectOthe
 
         {/* 닫기 버튼 */}
         <button type="button" onClick={onClose}
+          aria-label="비서 상세 닫기"
           className="absolute top-3.5 right-3.5 z-10 p-1.5 rounded-lg text-[#A8A6C0] hover:text-[#1A1826] hover:bg-[#F4F3FC] transition-colors">
           <X className="w-4.5 h-4.5" strokeWidth={1.8} style={{ width: 18, height: 18 }} />
         </button>
 
+        {/* 비서명은 본문 스크롤 영역 밖에 고정 */}
+        <div className="shrink-0 border-b border-[#E4E2F0] bg-white px-5 py-4 pr-12">
+          <h2 className="text-[16px] font-bold text-[#1A1826] leading-snug break-words">{a.name}
+            {a.isDeleted && <span className="ml-2 rounded-full border border-red-200 bg-red-50 px-2 py-0.5 text-[11px] font-bold text-red-600">삭제</span>}
+          </h2>
+        </div>
+
         {/* 스크롤 영역 */}
-        <div className="overflow-y-auto flex-1" style={{ scrollbarWidth: 'none' }}>
+        <div className="min-h-0 overflow-y-auto flex-1" style={{ scrollbarWidth: 'none' }}>
 
           {/* ── 헤더 ── */}
           <div className="flex flex-col items-center px-6 pt-8 pb-5 text-center"
@@ -189,11 +197,6 @@ export default function AssistantInfoModal({ assistant: a, onClose, onSelectOthe
               style={{ background: c.bg, border: `1.5px solid ${c.ring}30` }}>
               <a.icon style={{ width: 30, height: 30, color: c.text }} strokeWidth={1.6} />
             </div>
-
-            {/* 이름 */}
-            <h2 className="text-[18px] font-bold text-[#1A1826] leading-snug mb-1">{a.name}
-              {a.isDeleted && <span className="ml-2 rounded-full border border-red-200 bg-red-50 px-2 py-0.5 text-[11px] font-bold text-red-600">삭제</span>}
-            </h2>
 
             {/* 메타 */}
             <p className="text-[13px] text-[#A8A6C0] mb-2.5">
