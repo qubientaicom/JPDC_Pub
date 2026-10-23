@@ -12,6 +12,7 @@ export interface AssistantDetail {
   category: string;
   users: string;
   isNew?: boolean;
+  isDeleted?: boolean;
   author?: string;
   version?: string;
   status?: 'official' | 'approved' | 'pending' | 'updating' | 'draft' | 'private' | 'rejected';
@@ -119,7 +120,8 @@ function RatingBars({ dist, count }: { dist: AssistantDetail['ratingDistribution
 /* ── 메인 모달 ── */
 export default function AssistantInfoModal({ assistant: a, onClose, onSelectOther, onStartChat, onClone }: Props) {
   const c = getCatColor(a.category);
-  const lockMessage = a.status === 'pending' ? '승인 대기 중'
+  const lockMessage = a.isDeleted ? '삭제된 비서 · 대화 불가'
+    : a.status === 'pending' ? '승인 대기 중'
     : a.status === 'updating' ? '버전 갱신중'
     : a.status === 'draft' ? '임시저장 중'
     : a.status === 'rejected' ? '승인불가' : null;
@@ -131,6 +133,7 @@ export default function AssistantInfoModal({ assistant: a, onClose, onSelectOthe
   const [cloned, setCloned] = useState(false);
 
   const handleCopyUrl = () => {
+    if (a.isDeleted) return;
     navigator.clipboard.writeText(`https://jpdc.ai/assistants/${encodeURIComponent(a.name)}`);
     setCopied(true);
     setTimeout(() => setCopied(false), 2000);
@@ -188,7 +191,9 @@ export default function AssistantInfoModal({ assistant: a, onClose, onSelectOthe
             </div>
 
             {/* 이름 */}
-            <h2 className="text-[18px] font-bold text-[#1A1826] leading-snug mb-1">{a.name}</h2>
+            <h2 className="text-[18px] font-bold text-[#1A1826] leading-snug mb-1">{a.name}
+              {a.isDeleted && <span className="ml-2 rounded-full border border-red-200 bg-red-50 px-2 py-0.5 text-[11px] font-bold text-red-600">삭제</span>}
+            </h2>
 
             {/* 메타 */}
             <p className="text-[13px] text-[#A8A6C0] mb-2.5">
@@ -355,7 +360,7 @@ export default function AssistantInfoModal({ assistant: a, onClose, onSelectOthe
                 {cloned ? '복제됨' : '복제'}
               </button>
             </Tooltip>
-            <button type="button" onClick={handleCopyUrl}
+            <button type="button" onClick={handleCopyUrl} disabled={a.isDeleted}
               className={`flex-1 flex items-center justify-center gap-1.5 py-2.5 rounded-xl border text-[14px] font-semibold transition-all
                 ${copied
                   ? 'bg-[#DCFCE7] border-[#86EFAC] text-[#16A34A]'

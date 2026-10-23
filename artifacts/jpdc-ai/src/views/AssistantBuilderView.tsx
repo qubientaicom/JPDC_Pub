@@ -330,10 +330,11 @@ function AssistantTestPanel({
 }
 
 /* ─── 메인 컴포넌트 ─── */
-export default function AssistantBuilderView({ onBack, initialDraft, editMode = false }: {
+export default function AssistantBuilderView({ onBack, initialDraft, editMode = false, onSave }: {
   onBack: () => void;
   initialDraft?: DraftJson;
   editMode?: boolean;
+  onSave?: (draft: DraftJson) => boolean;
 }) {
   const [step, setStep] = useState<Step>(initialDraft ? 'form' : 'chat');
 
@@ -397,6 +398,10 @@ export default function AssistantBuilderView({ onBack, initialDraft, editMode = 
 
   const handleSave = () => {
     if (!draft.name.trim() || !draft.instructions.trim()) return;
+    if (onSave && !onSave(draft)) {
+      setSaveNotice('변경사항을 저장하지 못했습니다. 브라우저 저장 공간을 확인하고 다시 시도해 주세요.');
+      return;
+    }
     setIsTestEnabled(true);
     setApprovalRequested(false);
     setSaveNotice(requestReview

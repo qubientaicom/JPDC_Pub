@@ -53,7 +53,8 @@ export default function PocAnnouncementModal() {
               사용자 사용성 PoC에 참여해 주세요
             </Dialog.Title>
             <Dialog.Description className="mt-2 text-[13.5px] leading-relaxed text-white/85">
-              JPDC AI는 현재 개발 중인 AI 플랫폼으로, 사용자 사용성 테스트를 진행하고 있습니다. 평소 업무에서 자주 하시는 질문을 편하게 입력해 보세요.
+              <span className="block">JPDC AI는 현재 개발 중인 AI 플랫폼으로, 사용자 사용성 테스트를 진행하고 있습니다.</span>
+              <span className="mt-3 block">평소 업무에서 자주 하시는 질문을 편하게 입력해 보세요.</span>
             </Dialog.Description>
           </div>
 
@@ -61,8 +62,8 @@ export default function PocAnnouncementModal() {
             <ol className="group">
               <Step n={1} icon={<Search className="h-4 w-4" />} title="사내 지침 검색">
                 <p>이런 질문을 해 보세요.</p>
-                <Example>대외비 문서의 결재 절차와 보관 방법을 알려줘</Example>
-                <Example>공공기관 보안 지침에서 외부 반출 금지 자료의 범위는 어디까지인가요?</Example>
+                <Example>도외 출장 일비랑 식비는 얼마야?</Example>
+                <Example>직무관련자한테 받을 수 있는 선물 한도는?</Example>
               </Step>
               <Step n={2} icon={<BarChart2 className="h-4 w-4" />} title="운영 데이터 조회 (월별생산량, 일지정보)">
                 <p>월별생산량과 일지정보를 질문으로 조회해 보세요.</p>

@@ -10,6 +10,8 @@ import Tooltip from '../components/Tooltip';
 import type { SavedItem } from '../components/SavedPanel';
 import AssistantInfoModal, { type AssistantDetail } from '../components/AssistantInfoModal';
 import AssistantBuilderView, { type DraftJson } from './AssistantBuilderView';
+import DeleteAssistantDialog from '../components/DeleteAssistantDialog';
+import { assistantId, loadMyAssistants, saveMyAssistants, markAssistantDeleted, type MyAssistant, type AssistantStatusBadge, type ScopeBadge } from '../lib/my-assistants';
 
 /* ─── 공유 타입 ─── */
 interface MarketSharedProps {
@@ -149,24 +151,6 @@ function toDetail(a: BaseAssistant): AssistantDetail {
 }
 
 /* ─── 내가 만든 비서 데이터 ─── */
-type ScopeBadge = '비공개' | '지정자' | '부서' | '본부' | '전사';
-type AssistantStatusBadge = '임시저장' | '공식' | '승인완료' | '버전 갱신중' | '승인 대기' | '승인불가';
-
-interface MyAssistantComment { author: string; text: string; ts: string; }
-interface MyAssistantStats {
-  dialogueCount: number; messageCount: number; category?: string;
-  rating?: number; ratingCount?: number;
-  ratingDistribution?: AssistantDetail['ratingDistribution'];
-  likes?: number; dislikes?: number;
-  comments: MyAssistantComment[];
-}
-interface MyAssistant {
-  name: string; desc: string; icon: LucideIcon; author: string;
-  version?: string; statusBadge?: AssistantStatusBadge; scope: ScopeBadge;
-  commentCount?: number; createdAt: string; updatedAt: string; isDraft?: boolean;
-  stats?: MyAssistantStats;
-  _isNew?: boolean;
-}
 const MY_ASSISTANTS: MyAssistant[] = [
   {
     name: '계약 검토 도우미', desc: '계약서 핵심 조항을 빠르게 정리해주는 비서',
@@ -249,18 +233,20 @@ function myAssistantToDetail(a: MyAssistant): AssistantDetail {
     users: '—',
     status: a.isDraft ? 'draft' : a.statusBadge ? statuses[a.statusBadge] : 'private',
     scope: a.scope,
+    isDeleted: a.isDeleted,
   };
 }
 
 /* ─── 공통 비서 리스트 카드 ─── */
 function AssistantListCard({
   name, desc, icon: Icon, author, version, statusBadge, scope,
-  commentCount, createdAt, updatedAt, isDraft, isTestCard, onAnalyze, onEdit, onClone, onContinue, isHighlighted,
+  commentCount, createdAt, updatedAt, isDraft, isTestCard, onAnalyze, onEdit, onClone, onContinue, isHighlighted, isDeleted, onDelete,
 }: {
   name: string; desc: string; icon: LucideIcon; author: string;
   version?: string; statusBadge?: string; scope: string;
   commentCount?: number; createdAt: string; updatedAt: string;
   isDraft?: boolean; isTestCard?: boolean; onAnalyze?: () => void; onEdit?: () => void; onClone?: () => void; onContinue?: () => void; isHighlighted?: boolean;
+  isDeleted?: boolean; onDelete?: () => void;
 }) {
   const [lit, setLit] = useState(!!isHighlighted);
   useEffect(() => {
@@ -273,8 +259,8 @@ function AssistantListCard({
   const badgeStyle  = statusBadge ? STATUS_BADGE_STYLE[statusBadge] : null;
   const scopeStyle  = SCOPE_STYLE[scope] ?? SCOPE_STYLE['비공개'];
   const testStyle   = STATUS_BADGE_STYLE['공개전 테스트'];
-  const canRegister = !isDraft && !isTestCard && !['공식', '승인완료', '승인 대기', '버전 갱신중'].includes(statusBadge ?? '');
-  const canCopyUrl  = !['비공개'].includes(scope);
+  const canRegister = !isDeleted && !isDraft && !isTestCard && !['공식', '승인완료', '승인 대기', '버전 갱신중'].includes(statusBadge ?? '');
+  const canCopyUrl  = !isDeleted && !['비공개'].includes(scope);
 
   return (
     <div
@@ -301,7 +287,10 @@ function AssistantListCard({
             <Icon className="text-[#4F46E5]" strokeWidth={1.8} style={{ width: '18px', height: '18px' }} />
           </div>
           <div className="min-w-0 flex-1">
-            <p className="text-[14px] font-bold text-[#1A1826] leading-snug">{name}</p>
+            <div className="flex flex-wrap items-center gap-2">
+              <p className="text-[14px] font-bold text-[#1A1826] leading-snug">{name}</p>
+              {isDeleted && <span className="rounded-full border border-red-200 bg-red-50 px-2 py-0.5 text-[11px] font-bold text-red-600">삭제</span>}
+            </div>
             <p className="text-[12px] text-[#A8A6C0] mt-0.5">by {author}</p>
           </div>
         </div>
@@ -310,6 +299,7 @@ function AssistantListCard({
         <p className="text-[11.5px] text-[#6B6882] leading-relaxed mb-3 break-keep">
           {desc || '(설명 없음)'}
         </p>
+        {isDeleted && <p className="mb-3 text-[11.5px] text-red-600">삭제 상태로 보관 중입니다. 수정·복제할 수 있습니다.</p>}
 
         {/* 배지 행 + 코멘트 칩 */}
         <div className="flex items-center justify-between gap-2 mb-2.5">
@@ -347,7 +337,7 @@ function AssistantListCard({
 
       {/* 액션 버튼 행 */}
       <div className="px-5 py-3 border-t border-[#F4F3FC] bg-[#FAFAFF] flex items-center gap-1.5 flex-wrap">
-        {isDraft ? (
+        {isDraft && !isDeleted ? (
           <button type="button" onClick={onContinue}
             className="flex-1 px-3 py-1.5 rounded-lg bg-[#4F46E5] hover:bg-[#4338CA] text-white text-[12px] font-semibold transition-colors">
             이어서 작성
@@ -385,6 +375,12 @@ function AssistantListCard({
           <button type="button" onClick={onAnalyze}
             className="px-3 py-1.5 rounded-lg border border-[#E4E2F0] text-[#6B6882] hover:border-[#4F46E5]/30 hover:text-[#4F46E5] text-[12px] font-semibold transition-colors">
             분석
+          </button>
+        )}
+        {onDelete && !isDeleted && (
+          <button type="button" onClick={onDelete} aria-label={`${name} 삭제`}
+            className="px-3 py-1.5 rounded-lg border border-red-200 text-red-600 hover:bg-red-50 text-[12px] font-semibold transition-colors">
+            삭제
           </button>
         )}
       </div>
@@ -601,12 +597,13 @@ const RECOMMENDED_HELP = (
 );
 
 /* ─── 탭 1: 내가 만든 모든 비서 ─── */
-function MyAssistantsTab({ onEdit, list, setList, onOpenBuilder, onAnalyze }: {
+function MyAssistantsTab({ onEdit, list, setList, onOpenBuilder, onAnalyze, onDelete }: {
   onEdit: (a: MyAssistant) => void;
   list: MyAssistant[];
   setList: React.Dispatch<React.SetStateAction<MyAssistant[]>>;
   onOpenBuilder: () => void;
   onAnalyze: (a: MyAssistant) => void;
+  onDelete: (a: MyAssistant) => void;
 }) {
 
   const handleClone = (index: number) => {
@@ -614,7 +611,10 @@ function MyAssistantsTab({ onEdit, list, setList, onOpenBuilder, onAnalyze }: {
     const today = new Date().toISOString().slice(0, 10);
     const clone: MyAssistant = {
       ...source,
+      id: crypto.randomUUID(),
+      isDeleted: false,
       name: `${source.name} [복제]`,
+      draft: source.draft ? { ...source.draft, name: `${source.name} [복제]` } : undefined,
       statusBadge: '임시저장',
       scope: '비공개',
       isDraft: true,
@@ -702,11 +702,12 @@ function MyAssistantsTab({ onEdit, list, setList, onOpenBuilder, onAnalyze }: {
         ) : (
           <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
             {list.map((a, i) => (
-              <AssistantListCard key={`${a.name}-${i}`} {...a}
+              <AssistantListCard key={assistantId(a)} {...a}
                 isHighlighted={!!a._isNew}
                 onAnalyze={() => onAnalyze(a)}
                 onEdit={() => onEdit(a)}
                 onClone={() => handleClone(i)}
+                onDelete={() => onDelete(a)}
                 onContinue={() => onEdit(a)} />
             ))}
           </div>
@@ -1173,12 +1174,42 @@ export default function MarketView({ savedItems, savedPanelOpen, onToggleSavedPa
   const [activeTab, setActiveTab] = useState<MarketTab>('official');
   const [selectedAssistant, setSelectedAssistant] = useState<AssistantDetail | null>(null);
   const [showBuilder, setShowBuilder] = useState(false);
-  const [editTarget, setEditTarget] = useState<{ draft: DraftJson } | null>(null);
-  const [myList, setMyList] = useState<MyAssistant[]>(MY_ASSISTANTS);
+  const [editTarget, setEditTarget] = useState<{ id: string; draft: DraftJson } | null>(null);
+  const [myList, setMyListState] = useState<MyAssistant[]>(() => loadMyAssistants(MY_ASSISTANTS.map(a => ({ ...a, id: assistantId(a) }))));
+  const myListRef = useRef(myList);
+  const [deleteTarget, setDeleteTarget] = useState<MyAssistant | null>(null);
+  const [deleteError, setDeleteError] = useState('');
+  const [storageError, setStorageError] = useState('');
+  const setMyList: React.Dispatch<React.SetStateAction<MyAssistant[]>> = update => {
+    const next = typeof update === 'function' ? update(myListRef.current) : update;
+    try {
+      saveMyAssistants(next);
+      myListRef.current = next;
+      setMyListState(next);
+      setStorageError('');
+    } catch {
+      setStorageError('비서 정보를 저장하지 못했습니다. 브라우저 저장 공간을 확인하고 다시 시도해 주세요.');
+    }
+  };
+  const confirmDelete = () => {
+    if (!deleteTarget) return;
+    const next = markAssistantDeleted(myListRef.current, assistantId(deleteTarget), new Date().toISOString().slice(0, 10));
+    try {
+      saveMyAssistants(next);
+      myListRef.current = next;
+      setMyListState(next);
+      setDeleteTarget(null);
+      setDeleteError('');
+      setStorageError('');
+    } catch {
+      setDeleteError('삭제 상태를 저장하지 못했습니다. 브라우저 저장 공간을 확인하고 다시 시도해 주세요.');
+    }
+  };
 
   const handleCloneFromModal = (a: AssistantDetail) => {
     const today = new Date().toISOString().slice(0, 10);
     const cloned: MyAssistant = {
+      id: crypto.randomUUID(),
       name: `[복제] ${a.name}`,
       desc: a.fullDesc ?? a.desc,
       icon: a.icon,
@@ -1203,7 +1234,8 @@ export default function MarketView({ savedItems, savedPanelOpen, onToggleSavedPa
 
   const handleEditAssistant = (a: MyAssistant) => {
     setEditTarget({
-      draft: {
+      id: assistantId(a),
+      draft: a.draft ?? {
         name: a.name,
         description: a.desc,
         instructions: '',
@@ -1224,6 +1256,18 @@ export default function MarketView({ savedItems, savedPanelOpen, onToggleSavedPa
         onBack={() => { setShowBuilder(false); setEditTarget(null); }}
         initialDraft={editTarget?.draft}
         editMode={editTarget != null}
+        onSave={editTarget ? draft => {
+          const next = myListRef.current.map(a => assistantId(a) === editTarget.id
+            ? { ...a, name: draft.name, desc: draft.description, draft, updatedAt: new Date().toISOString().slice(0, 10) } : a);
+          try {
+            saveMyAssistants(next);
+            myListRef.current = next;
+            setMyListState(next);
+            return true;
+          } catch {
+            return false;
+          }
+        } : undefined}
       />
     );
   }
@@ -1290,12 +1334,14 @@ export default function MarketView({ savedItems, savedPanelOpen, onToggleSavedPa
       </div>
 
       {/* ── 탭 콘텐츠 ── */}
-      {activeTab === 'my'       && <MyAssistantsTab onEdit={handleEditAssistant} list={myList} setList={setMyList} onAnalyze={a => setSelectedAssistant(myAssistantToDetail(a))} onOpenBuilder={() => { setActiveTab('my'); setShowBuilder(true); }} />}
+      {storageError && <p role="alert" className="px-6 py-2 text-sm text-red-600">{storageError}</p>}
+      {activeTab === 'my'       && <MyAssistantsTab onEdit={handleEditAssistant} list={myList} setList={setMyList} onDelete={a => { setDeleteError(''); setDeleteTarget(a); }} onAnalyze={a => setSelectedAssistant(myAssistantToDetail(a))} onOpenBuilder={() => { setActiveTab('my'); setShowBuilder(true); }} />}
       {activeTab === 'test'     && <TestRequestTab />}
       {activeTab === 'official' && <OfficialTab onOpenGallery={() => handleTabChange('gallery')} onAssistantClick={handleAssistantClick} favorites={favorites} onToggleFavorite={onToggleFavorite} />}
       {activeTab === 'gallery'  && <GalleryView onBack={() => handleTabChange('official')} onAssistantClick={handleAssistantClick} favorites={favorites} onToggleFavorite={onToggleFavorite} />}
 
       {/* ── 비서 상세 모달 ── */}
+      <DeleteAssistantDialog name={deleteTarget?.name ?? null} error={deleteError} onCancel={() => { setDeleteTarget(null); setDeleteError(''); }} onConfirm={confirmDelete} />
       {selectedAssistant && (
         <AssistantInfoModal
           assistant={selectedAssistant}
@@ -1303,6 +1349,7 @@ export default function MarketView({ savedItems, savedPanelOpen, onToggleSavedPa
           onSelectOther={handleSelectOther}
           onClone={handleCloneFromModal}
           onStartChat={() => {
+            if (selectedAssistant.isDeleted) return;
             onStartWithAssistant?.({
               name: selectedAssistant.name,
               starters: selectedAssistant.starters ?? [],
