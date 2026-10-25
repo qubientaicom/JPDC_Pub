@@ -5,51 +5,89 @@ import { useTheme } from '../context/ThemeContext';
 import Tooltip from './Tooltip';
 import { SavedItemsList, type SavedItem } from './SavedPanel';
 
-const INITIAL_HISTORY_GROUPS = [
+type HistoryItem = {
+  title: string;
+  active: boolean;
+  assistantName?: string;
+  time?: string;
+};
+
+type HistoryGroup = {
+  label: string;
+  items: HistoryItem[];
+};
+
+const INITIAL_HISTORY_GROUPS: HistoryGroup[] = [
   {
     label: '오늘',
     items: [
-      { title: '입고 처리가 안된 작업 방법알려줘', active: false, badge: '지침·ERP 선택' },
-      { title: '입고 처리가 안 된 작업지시가 있어?', active: false, badge: 'RAG+TAG+비서' },
-      { title: '공공기관 보안 지침에서 외부 반출 금지 자료의 범위는 어디까지인가요?', active: true },
-      { title: '계약 협상 중인 단가 정보는 어떤 기준으로 보호되나요?', active: false },
+      { title: '입고 처리가 안된 작업 방법알려줘', active: false, time: '09:14' },
+      { title: '입고 처리가 안 된 작업지시가 있어?', active: false, assistantName: '입고 작업지시 관리 비서', time: '10:32' },
+      { title: '공공기관 보안 지침에서 외부 반출 금지 자료의 범위는 어디까지인가요?', active: true, time: '11:48' },
+      { title: '계약 협상 중인 단가 정보는 어떤 기준으로 보호되나요?', active: false, time: '12:12' },
     ],
   },
   {
     label: '어제',
     items: [
-      { title: '대외비 문서의 결재 절차와 보관 방법을 알려주세요', active: false },
-      { title: '감사 결과 보고서는 내부에서 어떻게 공유하나요?', active: false },
-      { title: '회의록 작성 잘 하는법', active: false, badge: '지침+비서' },
-      { title: '회의록 작성 어떻게 해? (미식별 후 비서 추천)', active: false, badge: '미식별+비서' },
-      { title: '비서 유형 활용 현황 구해줘 (TAG+비서)', active: false, badge: 'TAG+비서' },
-      { title: '3월 생산량 합계 보여줘 (TAG/분할/비서)', active: false, badge: 'TAG/분할/비서' },
-      { title: '3월 생산량 합계 보여줘', active: false, badge: 'TAG/분할' },
-      { title: '5월 생산량 월별 보여줘', active: false, badge: 'TAG' },
+      { title: '대외비 문서의 결재 절차와 보관 방법을 알려주세요', active: false, time: '09:05' },
+      { title: '감사 결과 보고서는 내부에서 어떻게 공유하나요?', active: false, time: '10:21' },
+      { title: '회의록 작성 잘 하는법', active: false, assistantName: '회의록 문장정리', time: '11:06' },
+      { title: '회의록 작성 어떻게 해?', active: false, assistantName: '회의록 문장정리', time: '12:12' },
+      { title: '비서 유형 활용 현황 구해줘', active: false, assistantName: '데이터 분석 비서', time: '13:40' },
+      { title: '3월 생산량 합계 보여줘', active: false, assistantName: 'TAG ERP 비서', time: '14:18' },
+      { title: '3월 생산량 합계 보여줘', active: false, time: '15:03' },
+      { title: '5월 생산량 월별 보여줘', active: false, time: '16:27' },
     ],
   },
   {
     label: '지난 7일',
     items: [
-      { title: '부서장 사전 승인 없이 자료를 반출했을 때 처벌 규정은?', active: false },
-      { title: '보안 일지 작성 시 필수 기재 항목이 뭔가요?', active: false },
-      { title: '계약 체결 전 단가 정보 유출 시 책임 소재는 어디에 있나요?', active: false },
-      { title: '직원 급여 명세를 인사팀 외에 공유하는 게 가능한가요?', active: false },
+      { title: '부서장 사전 승인 없이 자료를 반출했을 때 처벌 규정은?', active: false, time: '08:52' },
+      { title: '보안 일지 작성 시 필수 기재 항목이 뭔가요?', active: false, time: '10:17' },
+      { title: '계약 체결 전 단가 정보 유출 시 책임 소재는 어디에 있나요?', active: false, time: '13:26' },
+      { title: '직원 급여 명세를 인사팀 외에 공유하는 게 가능한가요?', active: false, time: '17:41' },
     ],
   },
 ];
 
-const CLICKABLE_HISTORIES = new Set([
-  '입고 처리가 안된 작업 방법알려줘',
-  '입고 처리가 안 된 작업지시가 있어?',
-  '계약 협상 중인 단가 정보는 어떤 기준으로 보호되나요?',
-  '회의록 작성 잘 하는법',
-  '회의록 작성 어떻게 해? (미식별 후 비서 추천)',
-  '비서 유형 활용 현황 구해줘 (TAG+비서)',
-  '3월 생산량 합계 보여줘 (TAG/분할/비서)',
-  '3월 생산량 합계 보여줘',
-  '5월 생산량 월별 보여줘',
-]);
+function getHistoryDate(groupLabel: string, itemIndex: number, time?: string) {
+  const daysAgo = groupLabel === '오늘'
+    ? 0
+    : groupLabel === '어제'
+      ? 1
+      : Math.min(itemIndex + 2, 6);
+  const date = new Date();
+  date.setHours(0, 0, 0, 0);
+  date.setDate(date.getDate() - daysAgo);
+
+  const pad = (value: number) => String(value).padStart(2, '0');
+  const fallbackTimes = ['09:14', '10:32', '11:48', '12:12', '13:40', '14:18', '15:03', '16:27'];
+  const displayTime = time && /^([01]\d|2[0-3]):[0-5]\d$/.test(time)
+    ? time
+    : fallbackTimes[itemIndex % fallbackTimes.length];
+  return {
+    label: `${date.getMonth() + 1}/${date.getDate()} ${displayTime}`,
+    dateTime: `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}T${displayTime}`,
+  };
+}
+
+function ConversationTypeBadge({ item }: { item: HistoryItem }) {
+  const assistantLabel = item.assistantName ? `비서 : ${item.assistantName}` : '일반 대화';
+  const isAssistant = Boolean(item.assistantName);
+
+  return (
+    <span
+      className={`inline-flex items-center rounded-md border px-1.5 py-0.5 text-[9.5px] font-semibold leading-none ${
+        isAssistant
+          ? 'border-[#DDD8FF] bg-[#F0EEFF] text-[#5B50C8]'
+          : 'border-[#E4E2EA] bg-[#F5F4F7] text-[#747180]'
+      }`}
+    >
+      {assistantLabel}
+    </span>
+  );
+}
 
 interface SidebarProps {
   open: boolean;
@@ -83,7 +121,7 @@ function ConversationSearchModal({ onClose, onSelect }: {
   }, [onClose]);
 
   const allItems = INITIAL_HISTORY_GROUPS.flatMap(g =>
-    g.items.map(item => ({ ...item, group: g.label }))
+    g.items.map((item, index) => ({ ...item, group: g.label, itemIndex: index }))
   );
   const q = query.trim().toLowerCase();
   const filtered = q ? allItems.filter(i => i.title.toLowerCase().includes(q)) : allItems;
@@ -160,17 +198,23 @@ function ConversationSearchModal({ onClose, onSelect }: {
                   className="w-full flex items-start gap-3 px-4 py-3 hover:bg-[#F4F3FC] transition-colors text-left group">
                   <MessageCircle className="w-4 h-4 text-[#C7C3F7] group-hover:text-[#4F46E5] shrink-0 mt-0.5 transition-colors" strokeWidth={1.8} />
                   <div className="flex-1 min-w-0">
-                    <p className="text-[13px] text-[#4B4A63] leading-snug break-keep">
-                      {highlight(item.title)}
-                    </p>
-                    {'badge' in item && item.badge && (
-                      <span className="mt-1 inline-flex items-center px-1.5 py-0.5 rounded-md text-[10px] font-semibold bg-[#F0EEFA] text-[#7C6FF7] border border-[#E4E0FA]">
-                        {item.badge}
-                      </span>
-                    )}
+                    <div className="flex items-start gap-2">
+                      <p className="min-w-0 flex-1 text-[13px] text-[#4B4A63] leading-snug break-keep">
+                        {highlight(item.title)}
+                      </p>
+                    </div>
+                    <div className="mt-1.5 flex flex-wrap items-center gap-1.5">
+                      <ConversationTypeBadge item={item} />
+                    </div>
                   </div>
-                  <span className="text-[11px] text-[#C7C3F7] shrink-0 mt-0.5 group-hover:text-[#A8A6C0]">
-                    {groupLabel[item.group] ?? item.group}
+                  <span className="shrink-0 mt-0.5 text-right">
+                    <span className="block text-[11px] text-[#C7C3F7] group-hover:text-[#A8A6C0]">
+                      {groupLabel[item.group] ?? item.group}
+                    </span>
+                    <time dateTime={getHistoryDate(item.group, item.itemIndex, item.time).dateTime}
+                      className="mt-0.5 block text-[10px] font-medium text-[#A8A6C0]">
+                      {getHistoryDate(item.group, item.itemIndex, item.time).label}
+                    </time>
                   </span>
                 </button>
               ))}
@@ -311,10 +355,11 @@ export default function Sidebar({ open, onToggle, activeView, onNavigate, onOpen
                 <p className="px-2 py-1 text-[11px] uppercase tracking-widest text-[#A8A6C0] font-semibold">
                   {group.label}
                 </p>
-                {group.items.map((item) => {
+                {group.items.map((item, itemIndex) => {
                   const isActive = item.active && activeView === 'home';
+                  const historyDate = getHistoryDate(group.label, itemIndex, item.time);
                   return (
-                    <div key={item.title}
+                    <div key={`${item.title}-${itemIndex}`}
                       className={`group/hist flex items-start rounded-lg transition-all border ${
                         isActive
                           ? 'bg-[#EEEEFF] border-[#C7C3F7]'
@@ -323,17 +368,21 @@ export default function Sidebar({ open, onToggle, activeView, onNavigate, onOpen
                       <button type="button"
                         onClick={() => onSelectHistory?.(item.title)}
                         className="flex-1 min-w-0 px-2 py-2 text-left">
-                        <span className={`text-[12.5px] leading-snug line-clamp-2 break-keep transition-colors ${
-                          isActive
-                            ? 'text-[#4F46E5] font-semibold'
-                            : 'text-[#6B6882] group-hover/hist:text-[#4F46E5] group-hover/hist:font-semibold'
-                        }`}>
-                          {item.title}
-                          {'badge' in item && item.badge && (
-                            <span className="ml-1.5 inline-flex items-center px-1.5 py-0.5 rounded-md text-[9.5px] font-semibold bg-[#F0EEFA] text-[#7C6FF7] border border-[#E4E0FA] align-middle">
-                              {item.badge}
-                            </span>
-                          )}
+                        <span className="flex items-start gap-1.5">
+                          <span className={`min-w-0 flex-1 text-[12.5px] leading-snug line-clamp-2 break-keep transition-colors ${
+                            isActive
+                              ? 'text-[#4F46E5] font-semibold'
+                              : 'text-[#6B6882] group-hover/hist:text-[#4F46E5] group-hover/hist:font-semibold'
+                          }`}>
+                            {item.title}
+                          </span>
+                          <time dateTime={historyDate.dateTime}
+                            className="shrink-0 pt-0.5 text-[10px] font-medium text-[#A8A6C0]">
+                            {historyDate.label}
+                          </time>
+                        </span>
+                        <span className="mt-1.5 flex">
+                          <ConversationTypeBadge item={item} />
                         </span>
                       </button>
                       <button type="button"
