@@ -135,7 +135,6 @@ function App() {
                 onStartWithAssistant={handleStartWithAssistant}
                 favorites={favorites}
                 onToggleFavorite={toggleFavorite}
-                assistantOrder={assistantOrder}
               />
             )}
             {activeView === 'briefing' && (

@@ -14,7 +14,7 @@ interface IconPickerModalProps {
 export default function IconPickerModal({ open, current, onSelect, onClose }: IconPickerModalProps) {
   const [search, setSearch] = useState('');
   const [activeCategory, setActiveCategory] = useState('all');
-  const [pickedColor, setPickedColor] = useState<{ bg: string; color: string }>(
+  const [pickedColor, setPickedColor] = useState<(typeof ICON_BG_COLORS)[number]>(
     ICON_BG_COLORS[0]
   );
   const [hoveredIcon, setHoveredIcon] = useState<string | null>(null);

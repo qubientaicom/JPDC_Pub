@@ -1,4 +1,5 @@
 import { MAX_ATTACHMENTS, prepareAttachments, type AttachmentRole, type MessageAttachment } from '../types/conversation';
+import { shouldShowNewConversationTip, startFreshHomeConversation } from '../lib/new-conversation-tip';
 import AttachmentUploadButtons from '../components/AttachmentUploadButtons';
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import type { SavedItem } from '../components/SavedPanel';
@@ -10,11 +11,11 @@ import {
 import { useTheme } from '../context/ThemeContext';
 import jpdcLogo from '../assets/jpdc-logo.png';
 import {
-  Sparkles, Share, MoreHorizontal, Paperclip, Mic, Menu, Store,
+  Sparkles, Share, MoreHorizontal, Paperclip, Mic, Menu, Store, Plus,
   ChevronDown, ChevronLeft, ChevronRight, ArrowUp, Square, FileText, RotateCcw, ThumbsUp, ThumbsDown,
   Copy, Bookmark, FileDown, MessageSquare, X, BookmarkCheck, Bell,
   PenTool, Code, Globe, BookOpen, BarChart2, Mic2, Users, ClipboardList, CheckCircle2,
-  TrendingUp, ArrowRight, Pencil, RefreshCw, Check, Database, Layers, type LucideIcon,
+  TrendingUp, ArrowRight, Pencil, RefreshCw, Check, Database, Layers, Maximize2, Minimize2, type LucideIcon,
 } from 'lucide-react';
 import {
   BarChart, Bar, LineChart, Line, AreaChart, Area,
@@ -1304,6 +1305,34 @@ function getRagAbData(query: string): RagAbData {
   return RAG_AB_MAP[query.trim()] ?? RAG_AB_MAP['삼다수 브랜드 관리 지침 알려줘'];
 }
 
+function AnswerExpandButton({
+  answerName,
+  expanded,
+  onToggle,
+}: {
+  answerName: string;
+  expanded: boolean;
+  onToggle: () => void;
+}) {
+  const label = expanded ? '두 답변 비교 화면으로 돌아가기' : `${answerName} 크게 보기`;
+  return (
+    <button
+      type="button"
+      onClick={onToggle}
+      aria-label={label}
+      aria-pressed={expanded}
+      title={label}
+      className="inline-flex shrink-0 items-center gap-1 rounded-lg border border-[#E4E2F0] bg-white px-2 py-1 text-[10.5px] font-semibold text-[#6B6882] transition-colors hover:border-[#C7C3F7] hover:bg-[#F9F8FF] hover:text-[#4F46E5] focus-visible:outline focus-visible:outline-2 focus-visible:outline-[#4F46E5]"
+    >
+      {expanded
+        ? <Minimize2 className="h-3.5 w-3.5" strokeWidth={1.8} />
+        : <Maximize2 className="h-3.5 w-3.5" strokeWidth={1.8} />
+      }
+      {expanded ? '비교 화면' : '크게 보기'}
+    </button>
+  );
+}
+
 function RagAbPanel({
   query,
   streamingA,
@@ -1324,6 +1353,7 @@ function RagAbPanel({
   const data = getRagAbData(query);
   const [doneA, setDoneA] = useState(false);
   const [doneB, setDoneB] = useState(false);
+  const [expandedSide, setExpandedSide] = useState<'A' | 'B' | null>(null);
   const reportedDone = useRef(false);
 
   useEffect(() => {
@@ -1390,10 +1420,21 @@ function RagAbPanel({
         </div>
 
         {/* 2-열 비교 */}
-        <div className="grid grid-cols-2 gap-3 items-start">
+        <div className={`grid ${expandedSide ? 'grid-cols-1' : 'grid-cols-1 sm:grid-cols-2'} gap-3 items-start`}>
 
           {/* ─── A안 ─── */}
-          <div className="flex flex-col gap-2">
+          <section
+            className="flex min-w-0 flex-col gap-2"
+            style={{ display: expandedSide === 'B' ? 'none' : undefined }}
+          >
+            <div className="flex items-center justify-between gap-2">
+              <span className="text-[12px] font-semibold text-[#2355B0]">A안 답변</span>
+              <AnswerExpandButton
+                answerName="A안 답변"
+                expanded={expandedSide === 'A'}
+                onToggle={() => setExpandedSide(current => current === 'A' ? null : 'A')}
+              />
+            </div>
             <div className="bg-white border border-[#E4E2F0] rounded-xl px-4 py-3.5 shadow-sm min-h-[120px]">
               {streamingA
                 ? <StreamingAnswer answer={data.answerA} onDone={() => setDoneA(true)} />
@@ -1401,10 +1442,21 @@ function RagAbPanel({
             </div>
             {(doneA || !streamingA) && sourceList(data.sourcesA)}
             {selectBtn('A', doneA)}
-          </div>
+          </section>
 
           {/* ─── B안 ─── */}
-          <div className="flex flex-col gap-2">
+          <section
+            className="flex min-w-0 flex-col gap-2"
+            style={{ display: expandedSide === 'A' ? 'none' : undefined }}
+          >
+            <div className="flex items-center justify-between gap-2">
+              <span className="text-[12px] font-semibold text-[#A05018]">B안 답변</span>
+              <AnswerExpandButton
+                answerName="B안 답변"
+                expanded={expandedSide === 'B'}
+                onToggle={() => setExpandedSide(current => current === 'B' ? null : 'B')}
+              />
+            </div>
             <div className="bg-white border border-[#E4E2F0] rounded-xl px-4 py-3.5 shadow-sm min-h-[120px]">
               {streamingB
                 ? <StreamingAnswer answer={data.answerB} onDone={() => setDoneB(true)} />
@@ -1412,7 +1464,7 @@ function RagAbPanel({
             </div>
             {(doneB || !streamingB) && sourceList(data.sourcesB)}
             {selectBtn('B', doneB)}
-          </div>
+          </section>
 
         </div>
         {actionBar}
@@ -1462,6 +1514,7 @@ function RagTagAssistantPanel({
   const candidates = showAssistant ? getAssistantCandidates(query) : [];
   const [ragDone, setRagDone] = useState(!streamingRag);
   const [tagDone, setTagDone] = useState(!streamingTag);
+  const [expandedSide, setExpandedSide] = useState<'rag' | 'tag' | null>(null);
   const reportedDone = useRef(false);
   const allDone = (!streamingRag || ragDone) && (!streamingTag || tagDone);
 
@@ -1489,13 +1542,21 @@ function RagTagAssistantPanel({
           </span>
         </div>
 
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 items-start">
+        <div className={`grid ${expandedSide ? 'grid-cols-1' : 'grid-cols-1 sm:grid-cols-2'} gap-3 items-start`}>
           {/* 왼쪽: RAG 답변 */}
-          <section className="flex flex-col gap-2 min-w-0">
+          <section
+            className="flex min-w-0 flex-col gap-2"
+            style={{ display: expandedSide === 'tag' ? 'none' : undefined }}
+          >
             <div className="flex items-center gap-1.5 px-3 py-2 rounded-xl bg-emerald-50 border border-emerald-200">
               <BookOpen className="w-3.5 h-3.5 text-emerald-600 shrink-0" strokeWidth={1.8} />
               <span className="text-[11.5px] font-semibold text-emerald-700">RAG 지침 답변</span>
-              <span className="ml-auto text-[11px] text-emerald-500 font-medium">규정·절차 검색</span>
+              <span className="ml-auto hidden lg:inline text-[11px] text-emerald-500 font-medium">규정·절차 검색</span>
+              <AnswerExpandButton
+                answerName="RAG 지침 답변"
+                expanded={expandedSide === 'rag'}
+                onToggle={() => setExpandedSide(current => current === 'rag' ? null : 'rag')}
+              />
             </div>
             <div className="bg-white border border-[#E4E2F0] rounded-xl px-4 py-3.5 shadow-sm min-h-[150px]">
               {streamingRag && !ragDone
@@ -1522,11 +1583,19 @@ function RagTagAssistantPanel({
           </section>
 
           {/* 오른쪽: TAG 답변 */}
-          <section className="flex flex-col gap-2 min-w-0">
+          <section
+            className="flex min-w-0 flex-col gap-2"
+            style={{ display: expandedSide === 'rag' ? 'none' : undefined }}
+          >
             <div className="flex items-center gap-1.5 px-3 py-2 rounded-xl bg-[#EEEEFF] border border-[#C7C3F7]">
               <BarChart2 className="w-3.5 h-3.5 text-[#4F46E5] shrink-0" strokeWidth={1.8} />
               <span className="text-[11.5px] font-semibold text-[#4F46E5]">TAG 현황 답변</span>
-              <span className="ml-auto text-[11px] text-[#7C6FF7] font-medium">업무 데이터 조회</span>
+              <span className="ml-auto hidden lg:inline text-[11px] text-[#7C6FF7] font-medium">업무 데이터 조회</span>
+              <AnswerExpandButton
+                answerName="TAG 현황 답변"
+                expanded={expandedSide === 'tag'}
+                onToggle={() => setExpandedSide(current => current === 'tag' ? null : 'tag')}
+              />
             </div>
             <div className="bg-white border border-[#E4E2F0] rounded-xl px-4 py-3.5 shadow-sm min-h-[150px]">
               {streamingTag && !tagDone
@@ -1985,12 +2054,16 @@ function InterpretationCard({
   rerunResult,
   onRerun,
   onContinue,
+  expanded,
+  onToggleExpanded,
 }: {
   interp: { title: string; description: string; params: { key: string; value: string }[]; sqlQuery: string; columns: string[]; rows: (string | number)[][]; chartData: { label: string; value: number }[]; chartUnit: string };
   colorScheme: 1 | 2;
   rerunResult: React.ReactNode;
   onRerun: (desc: string, params: { key: string; value: string }[]) => void;
   onContinue: () => void;
+  expanded: boolean;
+  onToggleExpanded: () => void;
 }) {
   const [desc, setDesc] = useState(interp.description);
   const [editingDesc, setEditingDesc] = useState(false);
@@ -2028,13 +2101,22 @@ function InterpretationCard({
       <div className={`px-4 py-3 border-b ${headerBg} ${headerBorder}`}>
         <div className="flex items-center justify-between gap-2 mb-2">
           <span className={`text-[12px] font-bold px-2 py-0.5 rounded-full ${badgeBg}`}>{interp.title}</span>
-          <button
-            onClick={() => onRerun(desc, params)}
-            className={`p-1 rounded-lg transition-colors ${rerunColor}`}
-            title="재조회"
-          >
-            <RefreshCw className="w-3.5 h-3.5" strokeWidth={2} />
-          </button>
+          <div className="flex shrink-0 items-center gap-1">
+            <AnswerExpandButton
+              answerName={interp.title}
+              expanded={expanded}
+              onToggle={onToggleExpanded}
+            />
+            <button
+              type="button"
+              onClick={() => onRerun(desc, params)}
+              className={`p-1 rounded-lg transition-colors ${rerunColor}`}
+              title="재조회"
+              aria-label="재조회"
+            >
+              <RefreshCw className="w-3.5 h-3.5" strokeWidth={2} />
+            </button>
+          </div>
         </div>
         {/* 편집 가능한 해석 문장 */}
         {editingDesc ? (
@@ -2200,6 +2282,7 @@ function DualTagPanel({
   const [textDone, setTextDone] = useState(false);
   const [rerun1, setRerun1] = useState<RerunState | null>(null);
   const [rerun2, setRerun2] = useState<RerunState | null>(null);
+  const [expandedSide, setExpandedSide] = useState<1 | 2 | null>(null);
   const rerun1StreamIdx = useRef(0);
   const rerun2StreamIdx = useRef(0);
 
@@ -2279,24 +2362,38 @@ function DualTagPanel({
         {/* 2분할 패널 */}
         {(!streaming || textDone) && (
           <div className="flex flex-col md:flex-row gap-3">
-            <InterpretationCard
-              interp={data.interpretation1}
-              colorScheme={1}
-              rerunResult={rerun1 && (
-                <RerunResultBlock state={rerun1} onToggle={() => setRerun1(p => p ? { ...p, expanded: !p.expanded } : p)} />
-              )}
-              onRerun={(desc, params) => startRerun(1, desc, params)}
-              onContinue={onContinue}
-            />
-            <InterpretationCard
-              interp={data.interpretation2}
-              colorScheme={2}
-              rerunResult={rerun2 && (
-                <RerunResultBlock state={rerun2} onToggle={() => setRerun2(p => p ? { ...p, expanded: !p.expanded } : p)} />
-              )}
-              onRerun={(desc, params) => startRerun(2, desc, params)}
-              onContinue={onContinue}
-            />
+            <div
+              className="min-w-0 flex-1"
+              style={{ display: expandedSide === 2 ? 'none' : undefined }}
+            >
+              <InterpretationCard
+                interp={data.interpretation1}
+                colorScheme={1}
+                rerunResult={rerun1 && (
+                  <RerunResultBlock state={rerun1} onToggle={() => setRerun1(p => p ? { ...p, expanded: !p.expanded } : p)} />
+                )}
+                onRerun={(desc, params) => startRerun(1, desc, params)}
+                onContinue={onContinue}
+                expanded={expandedSide === 1}
+                onToggleExpanded={() => setExpandedSide(current => current === 1 ? null : 1)}
+              />
+            </div>
+            <div
+              className="min-w-0 flex-1"
+              style={{ display: expandedSide === 1 ? 'none' : undefined }}
+            >
+              <InterpretationCard
+                interp={data.interpretation2}
+                colorScheme={2}
+                rerunResult={rerun2 && (
+                  <RerunResultBlock state={rerun2} onToggle={() => setRerun2(p => p ? { ...p, expanded: !p.expanded } : p)} />
+                )}
+                onRerun={(desc, params) => startRerun(2, desc, params)}
+                onContinue={onContinue}
+                expanded={expandedSide === 2}
+                onToggleExpanded={() => setExpandedSide(current => current === 2 ? null : 2)}
+              />
+            </div>
           </div>
         )}
 
@@ -2420,19 +2517,23 @@ interface FileEntry {
 function InputBar({
   onSend,
   onStop,
+  onStartNewConversation,
   isAnswering = false,
   focusRequest = 0,
   awaitingFollowUp = false,
   awaitingAnswerAdoption = false,
   activeAssistantName = null,
+  userTurnCount = 0,
 }: {
   onSend: (text: string, assistantName?: string | null, attachments?: MessageAttachment[]) => void;
   onStop: () => void;
+  onStartNewConversation: () => void;
   isAnswering?: boolean;
   focusRequest?: number;
   awaitingFollowUp?: boolean;
   awaitingAnswerAdoption?: boolean;
   activeAssistantName?: string | null;
+  userTurnCount?: number;
 }) {
   const [value, setValue] = useState('');
   const [attachedFiles, setAttachedFiles] = useState<FileEntry[]>([]);
@@ -2447,6 +2548,11 @@ function InputBar({
 
   const templateCount = attachedFiles.filter(f => f.role === 'template').length;
   const knowledgeCount = attachedFiles.length - templateCount;
+  const showNewConversationNotice = shouldShowNewConversationTip({
+    userTurnCount,
+    draft: value,
+    attachmentCount: attachedFiles.length,
+  });
 
   const doSend = () => {
     if (isAnswering) return;
@@ -2491,6 +2597,24 @@ function InputBar({
                 위 답변에서 선택하여 <strong>‘1개의 답변을 채택’</strong> 하지 않고 질문을 입력하시면 <strong>신규 질의로 판단될 수 있습니다.</strong>
               </p>
             </div>
+          </div>
+        )}
+        {showNewConversationNotice && (
+          <div className="mb-3 px-1 text-center" role="note">
+            <p className="text-[14px] font-semibold leading-snug text-[#747287] sm:text-[15px]">
+              보다 나은 성능을 위해 새 대화에서 시작하세요
+            </p>
+            <p className="mt-2 text-[13px] leading-relaxed text-[#858397] sm:text-[14px]">
+              새로운 주제는 새 대화에서 질문하면 더 정확한 답변을 받을 수 있습니다.
+            </p>
+            <button
+              type="button"
+              onClick={() => startFreshHomeConversation(onStartNewConversation)}
+              className="mt-3 inline-flex h-10 items-center gap-2 rounded-full border border-[#E4E2F0] bg-white px-5 text-[13px] font-semibold text-[#6B6882] shadow-sm transition-colors hover:border-[#C7C3F7] hover:bg-[#F9F8FF] hover:text-[#4F46E5] focus-visible:outline focus-visible:outline-2 focus-visible:outline-[#4F46E5]"
+            >
+              <Plus className="h-4 w-4" strokeWidth={2} />
+              새 대화 시작
+            </button>
           </div>
         )}
         <div className="bg-white rounded-2xl border border-[#E4E2F0] shadow-sm hover:border-[#C7C3F7] focus-within:border-[#4F46E5] focus-within:shadow-[0_0_0_3px_rgba(79,70,229,0.08)] transition-all">
@@ -2819,6 +2943,7 @@ export default function ConversationView({
   const { theme } = useTheme();
   const isDark = theme === 'dark';
   const [messages, setMessages] = useState<Message[]>(() => makeInitialMessages(initialQuery, assistantContext, initialAttachments));
+  const userTurnCount = messages.reduce((count, message) => count + Number(message.role === 'user'), 0);
   const [answerDoneSet, setAnswerDoneSet] = useState<Set<number>>(new Set());
   const [stoppedSet, setStoppedSet] = useState<Set<number>>(new Set());
   const [activeAssistantName, setActiveAssistantName] = useState<string | null>(assistantContext?.name ?? null);
@@ -3524,11 +3649,13 @@ export default function ConversationView({
       <InputBar
         onSend={handleSend}
         onStop={handleStop}
+        onStartNewConversation={() => onNavigate?.('home')}
         isAnswering={activeStreamingIndex >= 0}
         focusRequest={followUpFocusRequest}
         awaitingFollowUp={awaitingFollowUp}
         awaitingAnswerAdoption={awaitingAnswerAdoption}
         activeAssistantName={activeAssistantName}
+        userTurnCount={userTurnCount}
       />
     </div>
   );
