@@ -227,6 +227,17 @@ test('the visible new-chat tip button returns a three-turn draft to a fresh home
           && !text.includes('보다 나은 성능을 위해 새 대화에서 시작하세요');
       })()`));
     assert.ok(freshHome, 'The app should return to an empty home chat without the old conversation or tip');
+
+    const tagQuery = '2025년 3월 제주삼다수 2L 팔렛트 기준 판매량 상위 5개 알려줘';
+    await submitQuestion(tagQuery, true);
+    const interpretationText = await waitUntil('the detailed TAG query interpretation', () =>
+      cdp.evaluate(sessionId, `(() => {
+        const card = document.querySelector('[aria-label="TAG 질의 해석"]');
+        return card?.innerText ?? false;
+      })()`));
+    assert.match(interpretationText, /2025년 3월 제주삼다수 2L 판매량/);
+    assert.match(interpretationText, /팔레트 단위/);
+    assert.match(interpretationText, /상위 5개/);
   } finally {
     cdp?.socket.close();
     if (chrome && chrome.exitCode === null) {

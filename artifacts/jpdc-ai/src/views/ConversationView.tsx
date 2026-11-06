@@ -1,5 +1,6 @@
 import { MAX_ATTACHMENTS, prepareAttachments, type AttachmentRole, type MessageAttachment } from '../types/conversation';
 import { shouldShowNewConversationTip, startFreshHomeConversation } from '../lib/new-conversation-tip';
+import { interpretTagQuery } from '../lib/tag-query-interpretation';
 import AttachmentUploadButtons from '../components/AttachmentUploadButtons';
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import type { SavedItem } from '../components/SavedPanel';
@@ -1602,6 +1603,7 @@ function RagTagAssistantPanel({
                 ? <StreamingAnswer answer={tagData.answer} onDone={() => setTagDone(true)} />
                 : <div className="text-[13px] text-[#1A1826] space-y-0.5">{renderText(tagData.answer)}</div>}
             </div>
+            <TagQueryInterpretationCard query={query} />
             {(!streamingTag || tagDone) && (
               <>
                 <div className="border border-[#E4E2F0] rounded-xl overflow-hidden">
@@ -1905,13 +1907,50 @@ const CHART_OPTIONS: { value: ChartKind; label: string }[] = [
 ];
 const PIE_COLORS = ['#4F46E5', '#7C6FF7', '#A78BFA', '#C4B5FD', '#DDD6FE', '#EDE9FE', '#818CF8', '#6366F1'];
 
+function TagQueryInterpretationCard({ query }: { query: string }) {
+  const interpretation = interpretTagQuery(query);
+  if (!interpretation) return null;
+
+  return (
+    <section
+      aria-label="TAG 질의 해석"
+      className="rounded-xl border border-[#DCD8FA] bg-[#F8F7FF] px-4 py-3"
+    >
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        <p className="text-[12px] font-bold text-[#4F46E5]">조회 해석</p>
+        <span className="rounded-full border border-[#E4E2F0] bg-white px-2 py-0.5 text-[10px] font-medium text-[#77738E]">
+          질의에서 추출한 조건
+        </span>
+      </div>
+      <p className="mt-2 text-[12.5px] leading-relaxed text-[#343149]">{interpretation.summary}</p>
+      <div className="mt-2 flex flex-wrap gap-1.5" role="list" aria-label="추출된 조회 조건">
+        {interpretation.conditions.map(({ label, value }) => (
+          <span
+            key={label}
+            role="listitem"
+            className="inline-flex items-center gap-1 rounded-lg border border-[#E7E5F2] bg-white px-2 py-1 text-[10.5px]"
+          >
+            <span className="text-[#8A87A3]">{label}</span>
+            <span className="font-semibold text-[#3C3954]">{value}</span>
+          </span>
+        ))}
+      </div>
+      <p className="mt-2 text-[10.5px] text-[#8A87A3]">
+        질문에 명시되지 않은 조건은 임의로 채우지 않습니다.
+      </p>
+    </section>
+  );
+}
+
 function TagStatsPanel({
   statsData,
+  query,
   streaming,
   onDone,
   actionBar,
 }: {
   statsData: StatsData;
+  query: string;
   streaming: boolean;
   onDone: () => void;
   actionBar?: React.ReactNode;
@@ -1989,6 +2028,8 @@ function TagStatsPanel({
             <div className="text-[13.5px] text-[#1A1826] space-y-0.5">{renderText(statsData.answer)}</div>
           )}
         </div>
+
+        <TagQueryInterpretationCard query={query} />
 
         {(!streaming || textDone) && (
           <>
@@ -3522,6 +3563,7 @@ export default function ConversationView({
               return (
                 <TagStatsPanel key={i}
                   statsData={msg.statsData}
+                  query={prevUserText}
                   streaming={msg.streaming}
                   onDone={() => markDone(i)}
                   actionBar={(!msg.streaming || isDone) ? (
